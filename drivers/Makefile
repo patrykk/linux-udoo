@@ -124,7 +124,12 @@ obj-$(CONFIG_CPU_FREQ)		+= cpufreq/
 obj-$(CONFIG_CPU_IDLE)		+= cpuidle/
 obj-y				+= mmc/
 obj-$(CONFIG_MEMSTICK)		+= memstick/
+<<<<<<< HEAD
 obj-$(CONFIG_NEW_LEDS)		+= leds/
+=======
+obj-$(CONFIG_ARCH_MXC)		+= mxc/
+obj-y				+= leds/
+>>>>>>> 6438c237... Makefiles update
 obj-$(CONFIG_INFINIBAND)	+= infiniband/
 obj-$(CONFIG_SGI_SN)		+= sn/
 obj-y				+= firmware/
