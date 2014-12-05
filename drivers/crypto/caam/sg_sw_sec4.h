@@ -1,7 +1,7 @@
 /*
  * CAAM/SEC 4.x functions for using scatterlists in caam driver
  *
- * Copyright 2008-2011 Freescale Semiconductor, Inc.
+ * Copyright (C) 2008-2013 Freescale Semiconductor, Inc.
  *
  */
 
@@ -91,6 +91,11 @@ static int dma_map_sg_chained(struct device *dev, struct scatterlist *sg,
 {
 	if (unlikely(chained)) {
 		int i;
+	//struct scatterlist *tsg = sg;
+
+	/* We use a local copy of the sg pointer to avoid moving the
+	 * head of the list pointed to by sg as we wall the list.
+	 */
 		for (i = 0; i < nents; i++) {
 			dma_map_sg(dev, sg, 1, dir);
 			sg = scatterwalk_sg_next(sg);
@@ -98,6 +103,7 @@ static int dma_map_sg_chained(struct device *dev, struct scatterlist *sg,
 	} else {
 		dma_map_sg(dev, sg, nents, dir);
 	}
+
 	return nents;
 }
 
@@ -116,3 +122,4 @@ static int dma_unmap_sg_chained(struct device *dev, struct scatterlist *sg,
 	}
 	return nents;
 }
+
