@@ -172,3 +172,4 @@ obj-$(CONFIG_MFD_IPAQ_MICRO)	+= ipaq-micro.o
 
 intel-soc-pmic-objs		:= intel_soc_pmic_core.o intel_soc_pmic_crc.o
 obj-$(CONFIG_INTEL_SOC_PMIC)	+= intel-soc-pmic.o
+obj-$(CONFIG_MFD_MXC_HDMI)      += mxc-hdmi-core.o
