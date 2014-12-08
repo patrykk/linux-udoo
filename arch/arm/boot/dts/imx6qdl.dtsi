@@ -349,15 +349,27 @@
                                         compatible = "fsl,imx53-asrc";
                                         reg = <0x02034000 0x4000>;
                                         interrupts = <0 50 IRQ_TYPE_LEVEL_HIGH>;
-                                        clocks = <&clks 107>, <&clks 156>;
-                                        clock-names = "core", "dma";
-                                        dmas = <&sdma 17 20 1>, <&sdma 18 20 1>, <&sdma 19 20 1>,
-                                                <&sdma 20 20 1>, <&sdma 21 20 1>, <&sdma 22 20 1>;
+                                        clocks = <&clks 107>, <&clks 107>, <&clks 0>,
+					<&clks 0>, <&clks 0>, <&clks 0>, <&clks 0>,
+					<&clks 0>, <&clks 0>, <&clks 0>, <&clks 0>,
+					<&clks 0>, <&clks 0>, <&clks 0>, <&clks 0>,
+					<&clks 107>, <&clks 0>, <&clks 0>;	
+                                        clock-names = "mem", "ipg", "asrck_0",
+					"asrck_1", "asrck_2", "asrck_3", "asrck_4", 
+					"asrck_5", "asrck_6", "asrck_7", "asrck_8", 
+					"asrck_9", "asrck_a", "asrck_b", "asrck_c",
+					"asrck_d", "asrck_e", "asrck_f";	
+                                        dmas = <&sdma 17 23 1>, <&sdma 18 23 1>, <&sdma 19 23 1>,
+                                                <&sdma 20 23 1>, <&sdma 21 23 1>, <&sdma 22 23 1>;
                                         dma-names = "rxa", "rxb", "rxc",
                                                 "txa", "txb", "txc";
+					fsl,asrc-rate = <48000>;
+                                        fsl,asrc-width = <16>;
+					fsl,asrc-dma-rx-events = <17 18 19>;
+                                        fsl,asrc-dma-tx-events = <20 21 22>;
                                         status = "okay";
                                 };
-
+/*
  				asrc_p2p: asrc_p2p {
                                         compatible = "fsl,imx6q-asrc-p2p";
                                         fsl,output-rate  = <48000>;
@@ -366,7 +378,7 @@
                                         fsl,asrc-dma-tx-events = <20 21 22>;
                                         status = "okay";
                                 };
-
+*/
 				spba@0203c000 {
 					reg = <0x0203c000 0x4000>;
 				};
