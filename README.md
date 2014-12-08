@@ -62,8 +62,9 @@ Work:
  - HDMI audio
  - ASRC
  - sam3x port
- - i2c (no tested - could be unstable) 
- - imx watchdog 
+ - i2c (no tested - could be unstable)
+ - OTG (f.ex. modprobe g_mass_storage file=/dev/mmcblk0p1)
+ - imx watchdog
  - imx thermal
 
  
@@ -73,11 +74,7 @@ Work:
 
 Doesn't Work
 
-
  - CAAM (very unstable)
  - PCIe
- - OTG (no tested)
  - freescale camera
-
-
 
