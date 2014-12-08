@@ -1,7 +1,7 @@
 linux-udoo
 ==========
 
-Linux Udoo Kernel
+Linux Udoo Kernel - 3.17.x
 -----------------
 
 Howto install:
@@ -38,13 +38,13 @@ Versions
 --------
 
 This has been tested with:
-    - uboot-udoo-quad 2014.04, 
-    - libcec-imx6 13.20141201
-    - xf86-video-imx-viv 3.10.31_1.1.0 beta
-    - gst-imx 0.9.9
-    - imx-lib 3.10.31_1.1.0
-    - imx-vpu 3.10.31_1.1.0
-    - firmware-imx 3.10.31_1.1.0
+ - uboot-udoo-quad 2014.04, 
+ - libcec-imx6 13.20141201
+ - xf86-video-imx-viv 3.10.31_1.1.0 beta
+ - gst-imx 0.9.9
+ - imx-lib 3.10.31_1.1.0
+ - imx-vpu 3.10.31_1.1.0
+ - firmware-imx 3.10.31_1.1.0
 
 
 What Works and What Doesn't
@@ -59,12 +59,16 @@ Work:
  - HDMI video
  - Xorg driver with xrandr
  - OpenCL
- - HDMI audio (unstable)
+ - HDMI audio
+ - ASRC
  - sam3x port
  - i2c (no tested - could be unstable) 
- 
+ - imx watchdog 
+ - imx thermal
 
+ 
  - XBMC 
+ - gstream vpu
 
 
 Doesn't Work
