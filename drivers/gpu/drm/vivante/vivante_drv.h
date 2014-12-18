@@ -61,6 +61,34 @@
 
 #define DRIVER_MAJOR		1
 #define DRIVER_MINOR		0
-#define DRIVER_PATCHLEVEL	0
+#define DRIVER_PATCHLEVEL  4
 
+#include <linux/version.h>
+#include <linux/module.h>
+
+static char platformdevicename[] = "Vivante GCCore";
+static struct platform_device *pplatformdev;
+
+static const struct file_operations viv_driver_fops = {
+    .owner = THIS_MODULE,
+    .open = drm_open,
+    .release = drm_release,
+    .unlocked_ioctl = drm_ioctl,
+    .mmap = drm_mmap,
+    .poll = drm_poll,
+    .llseek = noop_llseek,
+};
+
+static struct drm_driver driver = {
+    .driver_features = DRIVER_USE_MTRR,
+    .fops = &viv_driver_fops,
+    .name = DRIVER_NAME,
+    .desc = DRIVER_DESC,
+    .date = DRIVER_DATE,
+    .major = DRIVER_MAJOR,
+    .minor = DRIVER_MINOR,
+    .patchlevel = DRIVER_PATCHLEVEL,
+};
+
+extern int drm_platform_init(struct drm_driver*, struct platform_device*);
 #endif
