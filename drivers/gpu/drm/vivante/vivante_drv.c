@@ -47,61 +47,20 @@
  *    Gareth Hughes <gareth@valinux.com>
  */
 
-#include <linux/version.h>
-#include <linux/module.h>
-
 #include "drmP.h"
 #include "vivante_drv.h"
 
-#include "drm_pciids.h"
-
-static char platformdevicename[] = "Vivante GCCore";
-static struct platform_device *pplatformdev;
-
-static const struct file_operations viv_driver_fops = {
-	.owner = THIS_MODULE,
-	.open = drm_open,
-	.release = drm_release,
-	.unlocked_ioctl = drm_ioctl,
-	.mmap = drm_mmap,
-	.poll = drm_poll,
-	.llseek = noop_llseek,
-};
-
-static struct drm_driver driver = {
-	.fops = &viv_driver_fops,
-	.name = DRIVER_NAME,
-	.desc = DRIVER_DESC,
-	.date = DRIVER_DATE,
-	.major = DRIVER_MAJOR,
-	.minor = DRIVER_MINOR,
-	.patchlevel = DRIVER_PATCHLEVEL,
-};
-
 static int __init vivante_init(void)
 {
-	int retcode;
-
 	pplatformdev = platform_device_register_simple(platformdevicename,
 			-1, NULL, 0);
 	if (pplatformdev == NULL)
 		printk(KERN_ERR"Platform device is null\n");
 
-	retcode = drm_platform_init(&driver, pplatformdev);
-
-	return retcode;
-}
-
-static void __exit vivante_exit(void)
-{
-	if (pplatformdev) {
-		platform_device_unregister(pplatformdev);
-		pplatformdev = NULL;
-	}
+   return drm_platform_init(&driver, pplatformdev);
 }
 
 module_init(vivante_init);
-module_exit(vivante_exit);
 
 MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);
