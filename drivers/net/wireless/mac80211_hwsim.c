@@ -1249,7 +1249,7 @@ static void mac80211_hwsim_tx(struct ieee80211_hw *hw,
 static int mac80211_hwsim_start(struct ieee80211_hw *hw)
 {
 	struct mac80211_hwsim_data *data = hw->priv;
-	wiphy_debug(hw->wiphy, "%s\n", __func__);
+	//wiphy_debug(hw->wiphy, "%s\n", __func__);
 	data->started = true;
 	return 0;
 }
@@ -1420,7 +1420,7 @@ static int mac80211_hwsim_config(struct ieee80211_hw *hw, u32 changed)
 {
 	struct mac80211_hwsim_data *data = hw->priv;
 	struct ieee80211_conf *conf = &hw->conf;
-	static const char *smps_modes[IEEE80211_SMPS_NUM_MODES] = {
+/*	static const char *smps_modes[IEEE80211_SMPS_NUM_MODES] = {
 		[IEEE80211_SMPS_AUTOMATIC] = "auto",
 		[IEEE80211_SMPS_OFF] = "off",
 		[IEEE80211_SMPS_STATIC] = "static",
@@ -1445,7 +1445,7 @@ static int mac80211_hwsim_config(struct ieee80211_hw *hw, u32 changed)
 			    !!(conf->flags & IEEE80211_CONF_IDLE),
 			    !!(conf->flags & IEEE80211_CONF_PS),
 			    smps_modes[conf->smps_mode]);
-
+*/
 	data->idle = !!(conf->flags & IEEE80211_CONF_IDLE);
 
 	data->channel = conf->chandef.chan;
@@ -1475,7 +1475,7 @@ static void mac80211_hwsim_configure_filter(struct ieee80211_hw *hw,
 {
 	struct mac80211_hwsim_data *data = hw->priv;
 
-	wiphy_debug(hw->wiphy, "%s\n", __func__);
+	//wiphy_debug(hw->wiphy, "%s\n", __func__);
 
 	data->rx_filter = 0;
 	if (*total_flags & FIF_PROMISC_IN_BSS)
@@ -1648,7 +1648,7 @@ static int mac80211_hwsim_get_survey(
 {
 	struct ieee80211_conf *conf = &hw->conf;
 
-	wiphy_debug(hw->wiphy, "%s (idx=%d)\n", __func__, idx);
+	//wiphy_debug(hw->wiphy, "%s (idx=%d)\n", __func__, idx);
 
 	if (idx != 0)
 		return -ENOENT;
@@ -1856,7 +1856,7 @@ static int mac80211_hwsim_hw_scan(struct ieee80211_hw *hw,
 		memcpy(hwsim->scan_addr, vif->addr, ETH_ALEN);
 	mutex_unlock(&hwsim->mutex);
 
-	wiphy_debug(hw->wiphy, "hwsim hw_scan request\n");
+	//wiphy_debug(hw->wiphy, "hwsim hw_scan request\n");
 
 	ieee80211_queue_delayed_work(hwsim->hw, &hwsim->hw_scan, 0);
 
@@ -1893,9 +1893,13 @@ static void mac80211_hwsim_sw_scan(struct ieee80211_hw *hw,
 		goto out;
 	}
 
+<<<<<<< HEAD
 	printk(KERN_DEBUG "hwsim sw_scan request, prepping stuff\n");
 
 	memcpy(hwsim->scan_addr, mac_addr, ETH_ALEN);
+=======
+	//printk(KERN_DEBUG "hwsim sw_scan request, prepping stuff\n");
+>>>>>>> 899d3c6... Remove some debug messages from mac80211 because of dmesg flood.
 	hwsim->scanning = true;
 
 out:
@@ -1909,7 +1913,7 @@ static void mac80211_hwsim_sw_scan_complete(struct ieee80211_hw *hw,
 
 	mutex_lock(&hwsim->mutex);
 
-	printk(KERN_DEBUG "hwsim sw_scan_complete\n");
+	//printk(KERN_DEBUG "hwsim sw_scan_complete\n");
 	hwsim->scanning = false;
 	memset(hwsim->scan_addr, 0, ETH_ALEN);
 
