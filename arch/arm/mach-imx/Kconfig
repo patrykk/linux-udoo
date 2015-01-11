@@ -703,6 +703,7 @@ config SOC_IMX6Q
 	select HAVE_ARM_TWD if SMP
 	select PCI_DOMAINS if PCI
 	select PINCTRL_IMX6Q
+	select ARCH_MXC_IOMUX_V3
 	select SOC_IMX6
 
 	help
