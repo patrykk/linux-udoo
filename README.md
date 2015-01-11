@@ -45,7 +45,7 @@ This has been tested with:
  - imx-lib 3.10.31_1.1.0
  - imx-vpu 3.10.31_1.1.0
  - firmware-imx 3.10.31_1.1.0
-
+ - Arduino Udoo
 
 What Works and What Doesn't
 --------
@@ -66,7 +66,8 @@ Work:
  - OTG (f.ex. modprobe g_mass_storage file=/dev/mmcblk0p1)
  - imx watchdog
  - imx thermal
-
+ - GPIOs on Udoo q/d
+ - SATA on Udoo quad
  
  - XBMC 
  - gstream vpu
