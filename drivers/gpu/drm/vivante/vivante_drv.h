@@ -82,6 +82,7 @@ static const struct file_operations viv_driver_fops = {
 
 static struct drm_driver driver = {
     .driver_features = DRIVER_USE_MTRR,
+    .set_busid = drm_platform_set_busid,
     .fops = &viv_driver_fops,
     .name = DRIVER_NAME,
     .desc = DRIVER_DESC,
