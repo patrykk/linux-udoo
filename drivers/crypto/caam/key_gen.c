@@ -1,7 +1,7 @@
 /*
  * CAAM/SEC 4.x functions for handling key-generation jobs
  *
- * Copyright 2008-2011 Freescale Semiconductor, Inc.
+ * Copyright (C) 2008-2013 Freescale Semiconductor, Inc.
  *
  */
 #include "compat.h"
@@ -19,8 +19,11 @@ void split_key_done(struct device *dev, u32 *desc, u32 err,
 	dev_err(dev, "%s %d: err 0x%x\n", __func__, __LINE__, err);
 #endif
 
-	if (err)
-		caam_jr_strstatus(dev, err);
+	if (err) {
+		char tmp[CAAM_ERROR_STR_MAX];
+
+		dev_err(dev, "%08x: %s\n", err, caam_jr_strstatus(tmp, err));
+	}
 
 	res->err = err;
 
@@ -64,7 +67,7 @@ int gen_split_key(struct device *jrdev, u8 *key_out, int split_key_len,
 	}
 
 	dma_addr_out = dma_map_single(jrdev, key_out, split_key_pad_len,
-				      DMA_FROM_DEVICE);
+					DMA_FROM_DEVICE);
 	if (dma_mapping_error(jrdev, dma_addr_out)) {
 		dev_err(jrdev, "unable to map key output memory\n");
 		goto out_unmap_in;
@@ -111,7 +114,6 @@ int gen_split_key(struct device *jrdev, u8 *key_out, int split_key_len,
 			       split_key_pad_len, 1);
 #endif
 	}
-
 	dma_unmap_single(jrdev, dma_addr_out, split_key_pad_len,
 			 DMA_FROM_DEVICE);
 out_unmap_in:
