@@ -356,6 +356,8 @@ struct dma_slave_config {
 	u32 dst_maxburst;
 	bool device_fc;
 	unsigned int slave_id;
+        int dma_request;
+        int dma_request2;
 };
 
 /**
