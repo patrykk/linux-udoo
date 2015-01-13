@@ -34,12 +34,10 @@
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
 #include <asm/system_misc.h>
-#include <linux/gpio.h>
 
 #include "common.h"
 #include "cpuidle.h"
 #include "hardware.h"
-#include "UDOO.h"
 
 /* For imx6q sabrelite board: set KSZ9021RN RGMII pad skew */
 static int ksz9021rn_phy_fixup(struct phy_device *phydev)
@@ -263,58 +261,6 @@ static void __init imx6q_axi_init(void)
 	}
 }
 
-/***********************************************************************
- *                               GPIO INPUT\OUTPUT                     *
- ***********************************************************************/
-
-void set_gpios_directions(void)
-{
-        int ret;
-        int i;
-
-        printk("Called set_gpios_direction\n");
-        printk("Test and set gpios directions and values by Gionji feat. Ekirei test\n");
-
-                for (i = 0; i<ARRAY_SIZE(mx6q_set_in_inputmode) ; i++){
-                        printk("INPUT GPIO %d:", i);
-                        ret = gpio_request (mx6q_set_in_inputmode[i], "gpio :D");
-                        if (ret) {
-                                printk("#### FAILED Eported gpio %d. error : %d \n", mx6q_set_in_inputmode[i], ret);
-
-                        } else {
-                                gpio_direction_input (mx6q_set_in_inputmode[i]);
-                                gpio_export(mx6q_set_in_inputmode[i], true);
-//                                printk(KERN_INFO "> Eported gpio %d (in the test input array )\n", test_gpios_set_in_inputmode[i]);
-                        }
-                }
-
-
-                for (i = 0; i<ARRAY_SIZE(mx6q_set_in_outputmode_low); i++){
-                        printk("OUTPUT GPIO BASSO %d:", i);
-                        ret = gpio_request (mx6q_set_in_outputmode_low[i], "gpio :S");
-                        if (ret) {
-                                printk("#### FAILED Eported gpio %d. error : %d \n", mx6q_set_in_outputmode_low[i], ret);
-                        } else {
-                                gpio_direction_output (mx6q_set_in_outputmode_low[i], 0);
-                                gpio_export(mx6q_set_in_outputmode_low[i], true);
-  //                              printk(KERN_INFO "> Eported gpio %d (in the test output LOW array )\n", test_gpios_set_in_outputmode_low[i]);
-                        }
-                }
-
-                for (i = 0; i<ARRAY_SIZE(mx6q_set_in_outputmode_high) ; i++){
-                        printk("OUTPUT GPIO ALTO %d:", i);
-                        ret = gpio_request (mx6q_set_in_outputmode_high[i], "gpio :S");
-                        if (ret) {
-                                printk("#### FAILED Eported gpio %d. error : %d \n", mx6q_set_in_outputmode_high[i], ret);
-                        } else {
-                                gpio_direction_output (mx6q_set_in_outputmode_high[i], 1);
-                                gpio_export(mx6q_set_in_outputmode_high[i], true);
-    //                            printk(KERN_INFO ">Eported gpio %d (in the test output HIGH array\n", test_gpios_set_in_outputmode_high[i]);
-                        }
-                }
-}
-
-
 static void __init imx6q_init_machine(void)
 {
 	struct device *parent;
@@ -336,11 +282,6 @@ static void __init imx6q_init_machine(void)
 	cpu_is_imx6q() ?  imx6q_pm_init() : imx6dl_pm_init();
 	imx6q_1588_init();
 	imx6q_axi_init();
-	//support for UDOO q and d
-        mxc_iomux_v3_setup_multiple_pads(mx6qd_seco_UDOO_pads,
-                 ARRAY_SIZE(mx6qd_seco_UDOO_pads));
-                 printk("\n> UDOO quad");
-        set_gpios_directions();
 }
 
 #define OCOTP_CFG3			0x440

@@ -98,23 +98,10 @@ typedef u64 iomux_v3_cfg_t;
 
 #define PAD_CTL_ODE			(1 << 3)
 
-#define PAD_CTL_SPEED_LOW               (1 << 6)
-#define PAD_CTL_SPEED_MED               (2 << 6)
-#define PAD_CTL_SPEED_HIGH              (3 << 6)
-
 #define PAD_CTL_DSE_LOW			(0 << 1)
 #define PAD_CTL_DSE_MED			(1 << 1)
 #define PAD_CTL_DSE_HIGH		(2 << 1)
 #define PAD_CTL_DSE_MAX			(3 << 1)
-
-#define PAD_CTL_DSE_DISABLE             (0 << 3)
-#define PAD_CTL_DSE_240ohm              (1 << 3)
-#define PAD_CTL_DSE_120ohm              (2 << 3)
-#define PAD_CTL_DSE_80ohm               (3 << 3)
-#define PAD_CTL_DSE_60ohm               (4 << 3)
-#define PAD_CTL_DSE_48ohm               (5 << 3)
-#define PAD_CTL_DSE_40ohm               (6 << 3)
-#define PAD_CTL_DSE_34ohm               (7 << 3)
 
 #define PAD_CTL_SRE_FAST		(1 << 0)
 #define PAD_CTL_SRE_SLOW		(0 << 0)
