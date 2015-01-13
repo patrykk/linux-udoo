@@ -68,6 +68,7 @@ Work:
  - imx thermal
  - GPIO - (check documentation for pins scheme and execute f.ex. "echo 40 > /sys/class/gpio/export" for gpio40)
  - SATA
+ - CAN
 
  - Arduino with Udoo patch (export gpio 0 and 1: "echo 0 > /sys/class/gpio/export; echo 1 > /sys/class/gpio/export")
  - XBMC 

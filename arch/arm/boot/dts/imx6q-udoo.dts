@@ -1,4 +1,4 @@
-/*
+6*
  * Copyright 2013 Freescale Semiconductor, Inc.
  *
  * Author: Fabio Estevam <fabio.estevam@freescale.com>
@@ -258,4 +258,14 @@
 
 &mxcfb1 {
 	status = "okay";
+};
+
+&can1 {
+	pinctrl-names = "default";
+        status = "okay";
+};
+
+&can2 {
+	pinctrl-names = "default";
+        status = "okay";
 };
