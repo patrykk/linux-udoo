@@ -2,6 +2,7 @@ linux-udoo
 ==========
 
 Linux Udoo Kernel - 3.18.x
+This branch base on 3.10.31 and 3.10.17 kernels from freescale
 -----------------
 
 Howto install:
