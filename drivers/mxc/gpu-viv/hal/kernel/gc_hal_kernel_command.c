@@ -358,7 +358,7 @@ _FlushMMU(
     if (pause)
     {
         /* Query size. */
-        gcmkONERROR(gckHARDWARE_Event(hardware, gcvNULL, 0, 0, &eventBytes));
+        gcmkONERROR(gckHARDWARE_Event(hardware, gcvNULL, 0, gcvKERNEL_PIXEL, &eventBytes));
         gcmkONERROR(gckHARDWARE_End(hardware, gcvNULL, &endBytes));
 
         executeBytes = eventBytes + endBytes;
@@ -605,6 +605,10 @@ gckCOMMAND_Construct(
             ));
     }
 
+#if gcdRECORD_COMMAND
+    gcmkONERROR(gckRECORDER_Construct(os, Kernel->hardware, &command->recorder));
+#endif
+
     /* No command queue in use yet. */
     command->index    = -1;
     command->logical  = gcvNULL;
@@ -770,6 +774,10 @@ gckCOMMAND_Destroy(
         gcmkVERIFY_OK(gcmkOS_SAFE_FREE(Command->os, gcmUINT64_TO_PTR(Command->hintArray)));
         Command->hintArrayAllocated = gcvFALSE;
     }
+#endif
+
+#if gcdRECORD_COMMAND
+    gckRECORDER_Destory(Command->os, Command->recorder);
 #endif
 
     /* Mark object as unknown. */
@@ -1713,7 +1721,7 @@ gckCOMMAND_Commit(
                 offset = (Command->pipeSelect == gcvPIPE_3D)
 
                     /* Skip pipe switching sequence. */
-                    ? Context->entryOffset3D + pipeBytes
+                    ? Context->entryOffset3D + Context->pipeSelectBytes
 
                     /* Do not skip pipe switching sequence. */
                     : Context->entryOffset3D;
@@ -1865,6 +1873,16 @@ gckCOMMAND_Commit(
         /* Commit context buffer to trust zone. */
         gckKERNEL_SecurityExecute(
             Command->kernel,
+            entryLogical,
+            entryBytes - 8
+            );
+#endif
+
+#if gcdRECORD_COMMAND
+        gckRECORDER_Record(
+            Command->recorder,
+            gcvNULL,
+            0xFFFFFFFF,
             entryLogical,
             entryBytes - 8
             );
@@ -2221,6 +2239,20 @@ gckCOMMAND_Commit(
         commandBufferLogical,
         commandBufferSize
         ));
+#endif
+
+#if gcdRECORD_COMMAND
+    gckRECORDER_Record(
+        Command->recorder,
+        commandBufferLogical + offset,
+        commandBufferSize - offset - 8,
+        gcvNULL,
+        0xFFFFFFFF
+        );
+
+    gckRECORDER_AdvanceIndex(Command->recorder, Command->commitStamp);
+
+    Command->commitStamp++;
 #endif
 
 #if gcdSECURITY
@@ -2902,11 +2934,7 @@ gckCOMMAND_Stall(
         }
 
     }
-    while (gcmIS_ERROR(status)
-#if gcdGPU_TIMEOUT
-           && (timer < Command->kernel->timeOut)
-#endif
-           );
+    while (gcmIS_ERROR(status));
 
     /* Bail out on timeout. */
     if (gcmIS_ERROR(status))
@@ -2961,6 +2989,7 @@ OnError:
 **          Pointer to a variable that will receive the number of states
 **          in the context buffer.
 */
+#if (gcdENABLE_3D || gcdENABLE_2D)
 gceSTATUS
 gckCOMMAND_Attach(
     IN gckCOMMAND Command,
@@ -3015,6 +3044,7 @@ OnError:
     gcmkFOOTER();
     return status;
 }
+#endif
 
 /*******************************************************************************
 **

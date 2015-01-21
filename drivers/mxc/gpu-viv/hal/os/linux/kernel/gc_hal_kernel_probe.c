@@ -97,7 +97,10 @@ module_param(registerMemBaseVG, ulong, 0644);
 static ulong registerMemSizeVG = 2 << 10;
 module_param(registerMemSizeVG, ulong, 0644);
 
-static ulong contiguousSize = 4 << 20;
+#ifndef gcdDEFAULT_CONTIGUOUS_SIZE
+#define gcdDEFAULT_CONTIGUOUS_SIZE (4 << 20)
+#endif
+static ulong contiguousSize = gcdDEFAULT_CONTIGUOUS_SIZE;
 module_param(contiguousSize, ulong, 0644);
 
 static ulong contiguousBase = 0;
@@ -112,7 +115,7 @@ module_param(fastClear, int, 0644);
 static int compression = -1;
 module_param(compression, int, 0644);
 
-static int powerManagement = 1;
+static int powerManagement = -1;
 module_param(powerManagement, int, 0644);
 
 static int gpuProfiler = 0;
@@ -142,8 +145,10 @@ MODULE_PARM_DESC(stuckDump, "Level of stuck dump content (1: Minimal, 2: Middle,
 static int showArgs = 0;
 module_param(showArgs, int, 0644);
 
+static int mmu = 1;
+module_param(mmu, int, 0644);
+
 static int gpu3DMinClock = 1;
-module_param(gpu3DMinClock, int, 0644);
 
 static int contiguousRequested = 0;
 
@@ -180,138 +185,6 @@ static struct file_operations driver_fops =
     .mmap       = drv_mmap,
 };
 
-static ssize_t show_meminfo(struct device_driver *dev, char *buf)
-{
-    gckKERNEL  kernel;
-    size_t size =0;
-
-    if(galDevice->kernels[gcvCORE_MAJOR])
-    {
-        kernel = galDevice->kernels[gcvCORE_MAJOR];
-    }
-    else if(galDevice->kernels[gcvCORE_VG])
-    {
-        kernel = galDevice->kernels[gcvCORE_VG];
-    }
-    else
-    {
-        kernel = galDevice->kernels[gcvCORE_2D];
-    }
-
-    size+= snprintf(buf+size, PAGE_SIZE-size,"Reseverd memory information:\n");
-    size+= snprintf(buf+size, PAGE_SIZE-size,"Type\r\tbaseaddress\r\t\t\tsize(bytes)\r\t\t\t\t\tused(bytes)\r\t\t\t\t\t\t\tfree(bytes)\n");
-    if(galDevice->internalVidMem)
-       size+= snprintf(buf+size, PAGE_SIZE-size,"Internal\r\t0x%x\r\t\t\t%u\r\t\t\t\t\t%u\r\t\t\t\t\t\t\t%u\n",
-            galDevice->internalVidMem->baseAddress,galDevice->internalVidMem->bytes,
-            galDevice->internalVidMem->bytes-galDevice->internalVidMem->freeBytes,
-            galDevice->internalVidMem->freeBytes);
-    if(galDevice->externalVidMem)
-       size+= snprintf(buf+size, PAGE_SIZE-size,"External\r\t0x%x\r\t\t\t%u\r\t\t\t\t\t%u\r\t\t\t\t\t\t\t%u\n",
-            galDevice->externalVidMem->baseAddress,galDevice->externalVidMem->bytes,
-            galDevice->externalVidMem->bytes-galDevice->externalVidMem->freeBytes,
-            galDevice->externalVidMem->freeBytes);
-    if(galDevice->contiguousVidMem)
-       size+= snprintf(buf+size, PAGE_SIZE-size,"System\r\t0x%x\r\t\t\t%u\r\t\t\t\t\t%u\r\t\t\t\t\t\t\t%u\n",
-            galDevice->contiguousVidMem ->baseAddress,galDevice->contiguousVidMem->bytes,
-            galDevice->contiguousVidMem->bytes-galDevice->contiguousVidMem->freeBytes,
-            galDevice->contiguousVidMem->freeBytes);
-
-#if DYNAMIC_MEMORY_RECORD
-    size+= snprintf(buf+size, PAGE_SIZE-size,"Dynamic memory information:\n");
-
-    size+= snprintf(buf+size, PAGE_SIZE-size,"Type\r\t\t\t\t\tused size(bytes)\n");
-    size+= snprintf(buf+size, PAGE_SIZE-size,"Cached memory\r\t\t\t\t\t%u\n",  galDevice->cachedsize);
-    size+= snprintf(buf+size, PAGE_SIZE-size,"Non paged memory\r\t\t\t\t\t%u\n",  galDevice->nonpagedmemorysize);
-#if LINUX_CMA_FSL
-    size+= snprintf(buf+size, PAGE_SIZE-size,"CMA memory\r\t\t\t\t\t%u\n",  galDevice->cmasize);
-#endif
-    size+= snprintf(buf+size, PAGE_SIZE-size,"Contiguous paged memory(low)\r\t\t\t\t\t%u\n",  galDevice->contiguouslowmemsize);
-    size+= snprintf(buf+size, PAGE_SIZE-size,"Contiguous paged memory(high)\r\t\t\t\t\t%u\n",  galDevice->contiguoushighmemsize);
-    size+= snprintf(buf+size, PAGE_SIZE-size,"NonContiguous paged memory(low)\r\t\t\t\t\t%u\n",  galDevice->noncontiguouslowmemsize);
-    size+= snprintf(buf+size, PAGE_SIZE-size,"NonContiguous paged memory(high)\r\t\t\t\t\t%u\n",  galDevice->noncontiguoushighmemsize);
-#endif
-    return strlen(buf);
-}
-
-static DRIVER_ATTR(meminfo, S_IRUGO | S_IWUSR, show_meminfo, NULL);
-
-static ssize_t show_pid(struct device_driver *dev, char *buf)
-{
-    gckKERNEL  kernel;
-    size_t size =0;
-    gcsDATABASE_PTR database;
-    gctINT i, pid;
-    gctUINT8 name[24];
-
-    if(galDevice->kernels[gcvCORE_MAJOR])
-    {
-        kernel = galDevice->kernels[gcvCORE_MAJOR];
-    }
-    else if(galDevice->kernels[gcvCORE_VG])
-    {
-        kernel = galDevice->kernels[gcvCORE_VG];
-    }
-    else
-    {
-        kernel = galDevice->kernels[gcvCORE_2D];
-    }
-
-    gckOS_AcquireMutex(kernel->os, kernel->db->dbMutex, gcvINFINITE);
-
-    size+= snprintf(buf+size, PAGE_SIZE-size, "**************************\n");
-    size+= snprintf(buf+size, PAGE_SIZE-size, "***  PROCESS DB DUMP   ***\n");
-    size+= snprintf(buf+size, PAGE_SIZE-size, "**************************\n");
-
-    size+= snprintf(buf+size, PAGE_SIZE-size, "%-8s%s\n", "PID", "NAME");
-    /* Walk the databases. */
-    for (i = 0; i < gcmCOUNTOF(kernel->db->db); ++i)
-    {
-        for (database = kernel->db->db[i];
-             database != gcvNULL;
-             database = database->next)
-        {
-            pid = database->processID;
-
-            gcmkVERIFY_OK(gckOS_GetProcessNameByPid(pid, gcmSIZEOF(name), name));
-
-            size+= snprintf(buf+size, PAGE_SIZE-size, "%-8d%s\n", pid, name);
-        }
-    }
-    gckOS_ReleaseMutex(kernel->os, kernel->db->dbMutex);
-    return size;
-}
-
-static DRIVER_ATTR(pid, S_IRUGO | S_IWUSR, show_pid, NULL);
-
-static ssize_t show_idletime(struct device_driver *dev, char *buf)
-{
-    gcuDATABASE_INFO info;
-    gckKERNEL  kernel;
-
-    memset(&info, 0, sizeof(info));
-
-    if(galDevice->kernels[gcvCORE_MAJOR])
-    {
-        kernel = galDevice->kernels[gcvCORE_MAJOR];
-    }
-    else if(galDevice->kernels[gcvCORE_VG])
-    {
-        kernel = galDevice->kernels[gcvCORE_VG];
-    }
-    else
-    {
-        kernel = galDevice->kernels[gcvCORE_2D];
-    }
-
-    if(gckKERNEL_QueryProcessDB(kernel,0,gcvFALSE,gcvDB_IDLE,&info)==gcvSTATUS_OK)
-        snprintf(buf, PAGE_SIZE, "GPU idle time since last query: %llu ns\n", info.time);
-
-    return strlen(buf);
-}
-
-
-static DRIVER_ATTR(idletime, S_IRUGO | S_IWUSR, show_idletime, gcvNULL);
-
 void
 _UpdateModuleParam(
     gcsMODULE_PARAMETERS *Param
@@ -344,6 +217,7 @@ _UpdateModuleParam(
     stuckDump         = Param->stuckDump;
     showArgs          = Param->showArgs;
     contiguousRequested = Param->contiguousRequested;
+    gpu3DMinClock     = Param->gpu3DMinClock;
 }
 
 void
@@ -449,7 +323,7 @@ int drv_open(
     }
     attached = gcvTRUE;
 
-    if ((!galDevice->contiguousMapped) && galDevice->contiguousSize)
+    if (!galDevice->contiguousMapped)
     {
         if (galDevice->contiguousPhysical != gcvNULL)
         {
@@ -548,7 +422,7 @@ int drv_release(
         gcmkONERROR(gcvSTATUS_INVALID_ARGUMENT);
     }
 
-    if ((!device->contiguousMapped) && device->contiguousSize)
+    if (!device->contiguousMapped)
     {
         if (data->contiguousLogical != gcvNULL)
         {
@@ -940,6 +814,7 @@ static int drv_init(void)
         .gpu3DMinClock      = gpu3DMinClock,
         .contiguousRequested = contiguousRequested,
         .platform           = &platform,
+        .mmu                = mmu,
     };
 
     gcmkHEADER();
@@ -947,11 +822,13 @@ static int drv_init(void)
     printk(KERN_INFO "Galcore version %d.%d.%d.%d\n",
         gcvVERSION_MAJOR, gcvVERSION_MINOR, gcvVERSION_PATCH, gcvVERSION_BUILD);
 
+#if !VIVANTE_PROFILER_PM
     /* when enable gpu profiler, we need to turn off gpu powerMangement */
     if (gpuProfiler)
     {
         powerManagement = 0;
     }
+#endif
 
     if (showArgs)
     {
@@ -1003,29 +880,6 @@ static int drv_init(void)
        && (device->kernels[gcvCORE_MAJOR] != gcvNULL)
        && (device->kernels[gcvCORE_MAJOR]->hardware->mmuVersion != 0))
     {
-#if !gcdSECURITY
-        gctUINT32 gpuPhysical;
-        gcmkVERIFY_OK(gckOS_CPUPhysicalToGPUPhysical(device->os, baseAddress, &gpuPhysical));
-
-        status = gckMMU_Enable(device->kernels[gcvCORE_MAJOR]->mmu, gpuPhysical, physSize);
-        gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_DRIVER,
-            "Enable new MMU: status=%d\n", status);
-
-#if gcdMULTI_GPU_AFFINITY
-        status = gckMMU_Enable(device->kernels[gcvCORE_OCL]->mmu, gpuPhysical, physSize);
-        gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_DRIVER,
-            "Enable new MMU: status=%d\n", status);
-#endif
-
-        if ((device->kernels[gcvCORE_2D] != gcvNULL)
-            && (device->kernels[gcvCORE_2D]->hardware->mmuVersion != 0))
-        {
-            status = gckMMU_Enable(device->kernels[gcvCORE_2D]->mmu, gpuPhysical, physSize);
-            gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_DRIVER,
-                "Enable new MMU for 2D: status=%d\n", status);
-        }
-#endif
-
         /* Reset the base address */
         device->baseAddress = 0;
     }
@@ -1124,7 +978,6 @@ static void drv_exit(void)
 
     unregister_chrdev(major, DEVICE_NAME);
 
-    galDevice->contiguousRequested = contiguousRequested;
     gcmkVERIFY_OK(gckGALDEVICE_Stop(galDevice));
     gcmkVERIFY_OK(gckGALDEVICE_Destroy(galDevice));
 
@@ -1175,6 +1028,7 @@ static int __devinit gpu_probe(struct platform_device *pdev)
         .recovery           = recovery,
         .stuckDump          = stuckDump,
         .showArgs           = showArgs,
+        .gpu3DMinClock      = gpu3DMinClock,
     };
 
     gcmkHEADER();
@@ -1205,18 +1059,6 @@ static int __devinit gpu_probe(struct platform_device *pdev)
     {
         platform_set_drvdata(pdev, galDevice);
 
-        ret = driver_create_file(pdev->dev.driver, &driver_attr_meminfo);
-        if(ret)
-            dev_err(&pdev->dev, "create meminfo attr failed (%d)\n", ret);
-
-        ret = driver_create_file(pdev->dev.driver, &driver_attr_pid);
-        if(ret)
-            dev_err(&pdev->dev, "create pid attr failed (%d)\n", ret);
-
-        ret = driver_create_file(pdev->dev.driver, &driver_attr_idletime);
-        if(ret)
-            dev_err(&pdev->dev, "create idletime attr failed (%d)\n", ret);
-
         gcmkFOOTER_NO();
         return ret;
     }
@@ -1232,10 +1074,6 @@ static int __devexit gpu_remove(struct platform_device *pdev)
 #endif
 {
     gcmkHEADER();
-
-    driver_remove_file(pdev->dev.driver, &driver_attr_meminfo);
-    driver_remove_file(pdev->dev.driver, &driver_attr_pid);
-    driver_remove_file(pdev->dev.driver, &driver_attr_idletime);
 
     drv_exit();
 
@@ -1380,7 +1218,7 @@ static int gpu_resume(struct platform_device *dev)
     return 0;
 }
 
-#ifdef CONFIG_PM
+#if defined(CONFIG_PM) && LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 30)
 #ifdef CONFIG_PM_SLEEP
 static int gpu_system_suspend(struct device *dev)
 {
@@ -1412,7 +1250,7 @@ static struct platform_driver gpu_driver = {
 
     .driver     = {
         .name   = DEVICE_NAME,
-#if CONFIG_PM
+#if defined(CONFIG_PM) && LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 30)
         .pm     = &gpu_pm_ops,
 #endif
     }
@@ -1488,6 +1326,8 @@ out:
 
 static void __exit gpu_exit(void)
 {
+    platform_driver_unregister(&gpu_driver);
+
     if (platform.ops->needAddDevice
      && platform.ops->needAddDevice(&platform))
     {
@@ -1499,8 +1339,6 @@ static void __exit gpu_exit(void)
         /* Free platform private data. */
         platform.ops->freePriv(&platform);
     }
-
-    platform_driver_unregister(&gpu_driver);
 }
 
 module_init(gpu_init);

@@ -110,15 +110,101 @@ gctCONST_STRING _DispatchText[] =
 };
 #endif
 
+#if gcdGPU_TIMEOUT && gcdINTERRUPT_STATISTIC
 void
-_ResetFinishFunction(
+_MonitorTimerFunction(
     gctPOINTER Data
     )
 {
     gckKERNEL kernel = (gckKERNEL)Data;
+    gctUINT32 pendingInterrupt;
+    gctBOOL reset = gcvFALSE;
+    gctUINT32 mask;
+    gctUINT32 advance = kernel->timeOut/2;
 
-    gckOS_AtomSet(kernel->os, kernel->resetAtom, 0);
+#if gcdENABLE_VG
+    if (kernel->core == gcvCORE_VG)
+    {
+        return;
+    }
+#endif
+
+    if (kernel->monitorTimerStop)
+    {
+        /* Stop. */
+        return;
+    }
+
+    gckOS_AtomGet(kernel->os, kernel->eventObj->interruptCount, &pendingInterrupt);
+
+    if (kernel->monitoring == gcvFALSE)
+    {
+        if (pendingInterrupt)
+        {
+            /* Begin to mointor GPU state. */
+            kernel->monitoring = gcvTRUE;
+
+            /* Record current state. */
+            kernel->lastCommitStamp = kernel->eventObj->lastCommitStamp;
+            kernel->restoreAddress  = kernel->hardware->lastWaitLink;
+            gcmkVERIFY_OK(gckOS_AtomGet(
+                kernel->os,
+                kernel->hardware->pendingEvent,
+                &kernel->restoreMask
+                ));
+
+            /* Clear timeout. */
+            kernel->timer = 0;
+        }
+    }
+    else
+    {
+        if (pendingInterrupt)
+        {
+            gcmkVERIFY_OK(gckOS_AtomGet(
+                kernel->os,
+                kernel->hardware->pendingEvent,
+                &mask
+                ));
+
+            if (kernel->eventObj->lastCommitStamp == kernel->lastCommitStamp
+             && kernel->hardware->lastWaitLink    == kernel->restoreAddress
+             && mask                              == kernel->restoreMask
+            )
+            {
+                /* GPU state is not changed, accumlate timeout. */
+                kernel->timer += advance;
+
+                if (kernel->timer >= kernel->timeOut)
+                {
+                    /* GPU stuck, trigger reset. */
+                    reset = gcvTRUE;
+                }
+            }
+            else
+            {
+                /* GPU state changed, cancel current timeout.*/
+                kernel->monitoring = gcvFALSE;
+            }
+        }
+        else
+        {
+            /* GPU finish all jobs, cancel current timeout*/
+            kernel->monitoring = gcvFALSE;
+        }
+    }
+
+    if (reset)
+    {
+        gckKERNEL_Recovery(kernel);
+
+        /* Work in this timeout is done. */
+        kernel->monitoring = gcvFALSE;
+    }
+
+    gcmkVERIFY_OK(gckOS_StartTimer(kernel->os, kernel->monitorTimer, advance));
 }
+#endif
 
 #if gcdPROCESS_ADDRESS_SPACE
 gceSTATUS
@@ -184,6 +270,11 @@ _DumpState(
 
     /* Dump Process DB. */
     gcmkVERIFY_OK(gckKERNEL_DumpProcessDB(Kernel));
+
+#if gcdRECORD_COMMAND
+    /* Dump record. */
+    gckRECORDER_Dump(Kernel->command->recorder);
+#endif
 }
 
 /*******************************************************************************
@@ -248,8 +339,7 @@ gckKERNEL_Construct(
 #if gcdDVFS
     kernel->dvfs         = gcvNULL;
 #endif
-
-    kernel->vidmemMutex  = gcvNULL;
+    kernel->monitorTimer = gcvNULL;
 
     /* Initialize the gckKERNEL object. */
     kernel->object.type = gcvOBJ_KERNEL;
@@ -304,8 +394,6 @@ gckKERNEL_Construct(
         kernel->timers[i].stopTime = 0;
     }
 
-    kernel->timeOut      = gcdGPU_TIMEOUT;
-
     /* Save context. */
     kernel->context = Context;
 
@@ -321,6 +409,8 @@ gckKERNEL_Construct(
         /* Construct the gckMMU object. */
         gcmkONERROR(
             gckVGKERNEL_Construct(Os, Context, kernel, &kernel->vg));
+
+        kernel->timeOut = gcdGPU_TIMEOUT;
     }
     else
 #endif
@@ -332,9 +422,10 @@ gckKERNEL_Construct(
         /* Set pointer to gckKERNEL object in gckHARDWARE object. */
         kernel->hardware->kernel = kernel;
 
-        /* Initialize the hardware. */
-        gcmkONERROR(
-            gckHARDWARE_InitializeHardware(kernel->hardware));
+        kernel->timeOut = kernel->hardware->type == gcvHARDWARE_2D
+                        ? gcdGPU_2D_TIMEOUT
+                        : gcdGPU_TIMEOUT
+                        ;
 
         /* Initialize virtual command buffer. */
         /* TODO: Remove platform limitation after porting. */
@@ -360,16 +451,13 @@ gckKERNEL_Construct(
         gcmkONERROR(
             gckMMU_Construct(kernel, gcdMMU_SIZE, &kernel->mmu));
 
-        gcmkONERROR(
-            gckOS_AtomConstruct(Os, &kernel->resetAtom));
-
-        gcmkVERIFY_OK(
-            gckOS_CreateTimer(Os,
-                              (gctTIMERFUNCTION)_ResetFinishFunction,
-                              (gctPOINTER)kernel,
-                              &kernel->resetFlagClearTimer));
-
         gcmkVERIFY_OK(gckOS_GetTime(&kernel->resetTimeStamp));
+
+        gcmkONERROR(gckHARDWARE_PrepareFunctions(kernel->hardware));
+
+        /* Initialize the hardware. */
+        gcmkONERROR(
+            gckHARDWARE_InitializeHardware(kernel->hardware));
 
 #if gcdDVFS
         if (gckHARDWARE_IsFeatureAvailable(kernel->hardware,
@@ -404,8 +492,28 @@ gckKERNEL_Construct(
     /* Connect to security service for this GPU. */
     gcmkONERROR(gckKERNEL_SecurityOpen(kernel, kernel->core, &kernel->securityChannel));
 #endif
-    /* Construct a video memory mutex. */
-    gcmkONERROR(gckOS_GetVideoMemoryMutex(Os, &kernel->vidmemMutex));
+
+#if gcdGPU_TIMEOUT && gcdINTERRUPT_STATISTIC
+    if (kernel->timeOut)
+    {
+        gcmkVERIFY_OK(gckOS_CreateTimer(
+            Os,
+            (gctTIMERFUNCTION)_MonitorTimerFunction,
+            (gctPOINTER)kernel,
+            &kernel->monitorTimer
+            ));
+
+        kernel->monitoring  = gcvFALSE;
+
+        kernel->monitorTimerStop = gcvFALSE;
+
+        gcmkVERIFY_OK(gckOS_StartTimer(
+            Os,
+            kernel->monitorTimer,
+            100
+            ));
+    }
+#endif
 
     /* Return pointer to the gckKERNEL object. */
     *Kernel = kernel;
@@ -447,17 +555,6 @@ OnError:
             gcmkVERIFY_OK(gckOS_AtomDestroy(Os, kernel->atomClients));
         }
 
-        if (kernel->resetAtom != gcvNULL)
-        {
-            gcmkVERIFY_OK(gckOS_AtomDestroy(Os, kernel->resetAtom));
-        }
-
-        if (kernel->resetFlagClearTimer)
-        {
-            gcmkVERIFY_OK(gckOS_StopTimer(Os, kernel->resetFlagClearTimer));
-            gcmkVERIFY_OK(gckOS_DestroyTimer(Os, kernel->resetFlagClearTimer));
-        }
-
         if (kernel->dbCreated && kernel->db != gcvNULL)
         {
             if (kernel->db->dbMutex != gcvNULL)
@@ -489,6 +586,12 @@ OnError:
             gcmkVERIFY_OK(gckOS_DestroySyncTimeline(Os, kernel->timeline));
         }
 #endif
+
+        if (kernel->monitorTimer)
+        {
+            gcmkVERIFY_OK(gckOS_StopTimer(Os, kernel->monitorTimer));
+            gcmkVERIFY_OK(gckOS_DestroyTimer(Os, kernel->monitorTimer));
+        }
 
         gcmkVERIFY_OK(gcmkOS_SAFE_FREE(Os, kernel));
     }
@@ -549,11 +652,13 @@ gckKERNEL_Destroy(
         {
             databaseNext = database->next;
 
+            gcmkVERIFY_OK(gckOS_DeleteMutex(Kernel->os, database->counterMutex));
             gcmkVERIFY_OK(gcmkOS_SAFE_FREE(Kernel->os, database));
         }
 
         if (Kernel->db->lastDatabase != gcvNULL)
         {
+            gcmkVERIFY_OK(gckOS_DeleteMutex(Kernel->os, Kernel->db->lastDatabase->counterMutex));
             gcmkVERIFY_OK(gcmkOS_SAFE_FREE(Kernel->os, Kernel->db->lastDatabase));
         }
 
@@ -582,6 +687,9 @@ gckKERNEL_Destroy(
 
         /* Destroy the database. */
         gcmkVERIFY_OK(gcmkOS_SAFE_FREE(Kernel->os, Kernel->db));
+
+        /* Notify stuck timer to quit. */
+        Kernel->monitorTimerStop = gcvTRUE;
     }
 
 #if gcdENABLE_VG
@@ -603,14 +711,6 @@ gckKERNEL_Destroy(
 
         /* Destroy the gckHARDWARE object. */
         gcmkVERIFY_OK(gckHARDWARE_Destroy(Kernel->hardware));
-
-        gcmkVERIFY_OK(gckOS_AtomDestroy(Kernel->os, Kernel->resetAtom));
-
-        if (Kernel->resetFlagClearTimer)
-        {
-            gcmkVERIFY_OK(gckOS_StopTimer(Kernel->os, Kernel->resetFlagClearTimer));
-            gcmkVERIFY_OK(gckOS_DestroyTimer(Kernel->os, Kernel->resetFlagClearTimer));
-        }
     }
 
     /* Detsroy the client atom. */
@@ -633,6 +733,12 @@ gckKERNEL_Destroy(
 #if gcdSECURITY
     gcmkVERIFY_OK(gckKERNEL_SecurityClose(Kernel->securityChannel));
 #endif
+
+    if (Kernel->monitorTimer)
+    {
+        gcmkVERIFY_OK(gckOS_StopTimer(Kernel->os, Kernel->monitorTimer));
+        gcmkVERIFY_OK(gckOS_DestroyTimer(Kernel->os, Kernel->monitorTimer));
+    }
 
     /* Mark the gckKERNEL object as unknown. */
     Kernel->object.type = gcvOBJ_UNKNOWN;
@@ -690,8 +796,6 @@ gckKERNEL_AllocateLinearMemory(
     gctSIZE_T bytes = Bytes;
     gctUINT32 handle = 0;
     gceDATABASE_TYPE type;
-    gctBOOL memlimit = gcvFALSE;
-
 
     gcmkHEADER_ARG("Kernel=0x%x *Pool=%d Bytes=%lu Alignment=%lu Type=%d",
                    Kernel, *Pool, Bytes, Alignment, Type);
@@ -705,14 +809,12 @@ gckKERNEL_AllocateLinearMemory(
     /* Check flags. */
     contiguous = Flag & gcvALLOC_FLAG_CONTIGUOUS;
     cacheable  = Flag & gcvALLOC_FLAG_CACHEABLE;
-    memlimit = Flag & gcvALLOC_FLAG_MEMLIMIT;
+
 AllocateMemory:
 
     /* Get initial pool. */
     switch (pool = *Pool)
     {
-    case gcvPOOL_DEFAULT_FORCE_CONTIGUOUS:
-        contiguous = gcvTRUE;
     case gcvPOOL_DEFAULT:
     case gcvPOOL_LOCAL:
         pool      = gcvPOOL_LOCAL_INTERNAL;
@@ -726,14 +828,6 @@ AllocateMemory:
 
     case gcvPOOL_CONTIGUOUS:
         loopCount = (gctINT) gcvPOOL_NUMBER_OF_POOLS;
-        cacheable = gcvTRUE; /*For be compatiable with android usage*/
-        break;
-
-    case gcvPOOL_DEFAULT_FORCE_CONTIGUOUS_CACHEABLE:
-        pool      = gcvPOOL_CONTIGUOUS;
-        loopCount = 1;
-        contiguous = gcvTRUE;
-        cacheable = gcvTRUE;
         break;
 
     default:
@@ -747,7 +841,7 @@ AllocateMemory:
         {
             /* Create a gcuVIDMEM_NODE for virtual memory. */
             gcmkONERROR(
-                gckVIDMEM_ConstructVirtual(Kernel, ( memlimit ? (gcvFALSE + gcvALLOC_FLAG_MEMLIMIT):gcvFALSE), Bytes, gcvTRUE, &node));
+                gckVIDMEM_ConstructVirtual(Kernel, Flag | gcvALLOC_FLAG_NON_CONTIGUOUS, Bytes, &node));
 
             bytes = node->Virtual.bytes;
             node->Virtual.type = Type;
@@ -768,7 +862,11 @@ AllocateMemory:
 #endif
             {
                 /* Create a gcuVIDMEM_NODE from contiguous memory. */
-                status = gckVIDMEM_ConstructVirtual(Kernel, ( memlimit ? (gcvTRUE + gcvALLOC_FLAG_MEMLIMIT):gcvTRUE), Bytes, cacheable, &node);
+                status = gckVIDMEM_ConstructVirtual(
+                            Kernel,
+                            Flag | gcvALLOC_FLAG_CONTIGUOUS,
+                            Bytes,
+                            &node);
             }
 
             if (gcmIS_SUCCESS(status))
@@ -791,13 +889,23 @@ AllocateMemory:
             if (gcmIS_SUCCESS(status))
             {
                 /* Allocate memory. */
-                status = gckVIDMEM_AllocateLinear(Kernel,
-                                                  videoMemory,
-                                                  Bytes,
-                                                  Alignment,
-                                                  Type,
-                                                  (*Pool == gcvPOOL_SYSTEM),
-                                                  &node);
+#if defined(gcdLINEAR_SIZE_LIMIT)
+                /* 512 KB */
+                if (Bytes > gcdLINEAR_SIZE_LIMIT)
+                {
+                    status = gcvSTATUS_OUT_OF_MEMORY;
+                }
+                else
+#endif
+                {
+                    status = gckVIDMEM_AllocateLinear(Kernel,
+                                                      videoMemory,
+                                                      Bytes,
+                                                      Alignment,
+                                                      Type,
+                                                      (*Pool == gcvPOOL_SYSTEM),
+                                                      &node);
+                }
 
                 if (gcmIS_SUCCESS(status))
                 {
@@ -852,7 +960,6 @@ AllocateMemory:
 
             if (contiguous)
             {
-                status = gcvSTATUS_OUT_OF_MEMORY;
                 break;
             }
 
@@ -928,8 +1035,8 @@ OnError:
     /* For some case like chrome with webgl test, it needs too much memory so that it invokes oom_killer
     * And the case is killed by oom_killer, the user wants not to see the crash and hope the case iteself handles the condition
     * So the patch reports the out_of_memory to the case */
-    if (status == gcvSTATUS_OUT_OF_MEMORY)
-	gcmkPRINT("OUT of memory\n");
+    if ( status == gcvSTATUS_OUT_OF_MEMORY && (Flag & gcvALLOC_FLAG_MEMLIMIT) )
+        gcmkPRINT("The running case is out_of_memory");
 
     /* Return the status. */
     gcmkFOOTER();
@@ -1049,12 +1156,15 @@ gckKERNEL_LockVideoMemory(
 
     node = nodeObject->node;
 
+    Interface->u.LockVideoMemory.gid = 0;
+
     /* Lock video memory. */
     gcmkONERROR(
             gckVIDMEM_Lock(Kernel,
-                node,
+                nodeObject,
                 Interface->u.LockVideoMemory.cacheable,
                 &Interface->u.LockVideoMemory.address,
+                &Interface->u.LockVideoMemory.gid,
                 &Interface->u.LockVideoMemory.physicalAddress));
 
     locked = gcvTRUE;
@@ -1127,7 +1237,7 @@ OnError:
     {
         /* Roll back the lock. */
         gcmkVERIFY_OK(gckVIDMEM_Unlock(Kernel,
-                    node,
+                    nodeObject,
                     gcvSURF_TYPE_UNKNOWN,
                     &asynchronous));
 
@@ -1135,7 +1245,7 @@ OnError:
         {
             /* Bottom Half */
             gcmkVERIFY_OK(gckVIDMEM_Unlock(Kernel,
-                        node,
+                        nodeObject,
                         gcvSURF_TYPE_UNKNOWN,
                         gcvNULL));
         }
@@ -1214,7 +1324,7 @@ gckKERNEL_UnlockVideoMemory(
     /* Unlock video memory. */
     gcmkONERROR(gckVIDMEM_Unlock(
         Kernel,
-        node,
+        nodeObject,
         Interface->u.UnlockVideoMemory.type,
         &Interface->u.UnlockVideoMemory.asynchroneous));
 
@@ -1246,6 +1356,7 @@ gckKERNEL_QueryDatabase(
 {
     gceSTATUS status;
     gctINT i;
+    gcuDATABASE_INFO tmp;
 
     gceDATABASE_TYPE type[3] = {
         gcvDB_VIDEO_MEMORY | (gcvPOOL_SYSTEM << gcdDB_VIDEO_MEMORY_POOL_SHIFT),
@@ -1297,9 +1408,52 @@ gckKERNEL_QueryDatabase(
                                      &Interface->u.Database.vidMemPool[i]));
     }
 
+    /* Query virtual command buffer pool. */
+    gcmkONERROR(
+        gckKERNEL_QueryProcessDB(Kernel,
+                                 Interface->u.Database.processID,
+                                 !Interface->u.Database.validProcessID,
+                                 gcvDB_COMMAND_BUFFER,
+                                 &tmp));
+
+    Interface->u.Database.vidMemPool[2].counters.bytes += tmp.counters.bytes;
+    Interface->u.Database.vidMemPool[2].counters.maxBytes += tmp.counters.maxBytes;
+    Interface->u.Database.vidMemPool[2].counters.totalBytes += tmp.counters.totalBytes;
+
+    Interface->u.Database.vidMem.counters.bytes += tmp.counters.bytes;
+    Interface->u.Database.vidMem.counters.maxBytes += tmp.counters.maxBytes;
+    Interface->u.Database.vidMem.counters.totalBytes += tmp.counters.totalBytes;
+
 #if gcmIS_DEBUG(gcdDEBUG_TRACE)
     gckKERNEL_DumpVidMemUsage(Kernel, Interface->u.Database.processID);
 #endif
+
+    gcmkFOOTER_NO();
+    return gcvSTATUS_OK;
+
+OnError:
+    gcmkFOOTER();
+    return status;
+}
+
+gceSTATUS
+gckKERNEL_ConfigPowerManagement(
+    IN gckKERNEL Kernel,
+    IN OUT gcsHAL_INTERFACE * Interface
+)
+{
+    gceSTATUS status;
+    gctBOOL enable = Interface->u.ConfigPowerManagement.enable;
+
+    gcmkHEADER();
+
+    gcmkONERROR(gckHARDWARE_SetPowerManagement(Kernel->hardware, enable));
+
+    if (enable == gcvTRUE)
+    {
+        gcmkONERROR(
+            gckHARDWARE_SetPowerManagementState(Kernel->hardware, gcvPOWER_ON));
+    }
 
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;
@@ -1345,7 +1499,9 @@ gckKERNEL_Dispatch(
     gctSIZE_T bytes;
     gctPOINTER logical = gcvNULL;
     gctPOINTER info = gcvNULL;
+#if (gcdENABLE_3D || gcdENABLE_2D)
     gckCONTEXT context = gcvNULL;
+#endif
     gckKERNEL kernel = Kernel;
     gctUINT32 address;
     gctUINT32 processID;
@@ -1783,69 +1939,10 @@ gckKERNEL_Dispatch(
             break;
 
         case gcvUSER_SIGNAL_WAIT:
-#if gcdGPU_TIMEOUT
-            if (Interface->u.UserSignal.wait == gcvINFINITE)
-            {
-                gckHARDWARE hardware;
-                gctUINT32 timer = 0;
-
-                for(;;)
-                {
-                    /* Wait on the signal. */
-                    status = gckOS_WaitUserSignal(Kernel->os,
-                                                  Interface->u.UserSignal.id,
-                                                  gcdGPU_ADVANCETIMER);
-
-                    if (status == gcvSTATUS_TIMEOUT)
-                    {
-                        gcmkONERROR(
-                            gckOS_SignalQueryHardware(Kernel->os,
-                                                      (gctSIGNAL)(gctUINTPTR_T)Interface->u.UserSignal.id,
-                                                      &hardware));
-
-                        if (hardware)
-                        {
-                            /* This signal is bound to a hardware,
-                            ** so the timeout is limited by gcdGPU_TIMEOUT.
-                            */
-                            timer += gcdGPU_ADVANCETIMER;
-                        }
-
-                        if (timer >= Kernel->timeOut)
-                        {
-                            gcmkONERROR(
-                                gckOS_Broadcast(Kernel->os,
-                                                hardware,
-                                                gcvBROADCAST_GPU_STUCK));
-
-                            timer = 0;
-
-                            /* If a few process try to reset GPU, only one
-                            ** of them can do the real reset, other processes
-                            ** still need to wait for this signal is triggered,
-                            ** which menas reset is finished.
-                            */
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        /* Bail out on other error. */
-                        gcmkONERROR(status);
-
-                        /* Wait for signal successfully. */
-                        break;
-                    }
-                }
-            }
-            else
-#endif
-            {
-                /* Wait on the signal. */
-                status = gckOS_WaitUserSignal(Kernel->os,
-                                              Interface->u.UserSignal.id,
-                                              Interface->u.UserSignal.wait);
-            }
+            /* Wait on the signal. */
+            status = gckOS_WaitUserSignal(Kernel->os,
+                                          Interface->u.UserSignal.id,
+                                          Interface->u.UserSignal.wait);
 
             break;
 
@@ -2120,7 +2217,8 @@ gckKERNEL_Dispatch(
         {
             Kernel->profileEnable = Interface->u.SetProfileSetting.enable;
 #if VIVANTE_PROFILER_NEW
-            gckHARDWARE_InitProfiler(Kernel->hardware);
+            if (Kernel->profileEnable)
+                gckHARDWARE_InitProfiler(Kernel->hardware);
 #endif
         }
         else
@@ -2334,6 +2432,7 @@ gckKERNEL_Dispatch(
         Interface->u.ChipInfo.types[0] = Kernel->hardware->type;
         break;
 
+#if (gcdENABLE_3D || gcdENABLE_2D)
     case gcvHAL_ATTACH:
         /* Attach user process. */
         gcmkONERROR(
@@ -2361,6 +2460,7 @@ gckKERNEL_Dispatch(
                                    gcvNULL,
                                    0));
         break;
+#endif
 
     case gcvHAL_DETACH:
         gcmkVERIFY_OK(
@@ -2431,6 +2531,18 @@ gckKERNEL_Dispatch(
                                    gcmINT2PTR(Interface->u.ImportVideoMemory.handle),
                                    gcvNULL,
                                    0));
+        break;
+
+    case gcvHAL_GET_VIDEO_MEMORY_FD:
+        gcmkONERROR(gckVIDMEM_NODE_GetFd(
+            Kernel,
+            Interface->u.GetVideoMemoryFd.handle,
+            &Interface->u.GetVideoMemoryFd.fd
+            ));
+
+        /* No need to add it to processDB because OS will release all fds when
+        ** process quits.
+        */
         break;
 
     case gcvHAL_QUERY_RESET_TIME_STAMP:
@@ -2601,6 +2713,10 @@ gckKERNEL_Dispatch(
                 break;
             }
         }
+        break;
+
+    case gcvHAL_CONFIG_POWER_MANAGEMENT:
+        gcmkONERROR(gckKERNEL_ConfigPowerManagement(Kernel, Interface));
         break;
 
     default:
@@ -3318,18 +3434,20 @@ gckKERNEL_Recovery(
     IN gckKERNEL Kernel
     )
 {
-#define gcdEVENT_MASK 0x3FFFFFFF
     gceSTATUS status;
     gckEVENT eventObj;
     gckHARDWARE hardware;
-#if gcdMULTI_GPU
-    gctSIZE_T i = 0;
-#endif
 #if gcdSECURE_USER
     gctUINT32 processID;
     gcskSECURE_CACHE_PTR cache;
 #endif
-    gctUINT32 oldValue;
+    gctUINT32 mask = 0;
+    gckCOMMAND command;
+    gckENTRYDATA data;
+    gctUINT32 i = 0, count = 0;
+#if gcdINTERRUPT_STATISTIC
+    gctINT32 oldValue;
+#endif
 
     gcmkHEADER_ARG("Kernel=0x%x", Kernel);
 
@@ -3344,21 +3462,16 @@ gckKERNEL_Recovery(
     hardware = Kernel->hardware;
     gcmkVERIFY_OBJECT(hardware, gcvOBJ_HARDWARE);
 
+    /* Grab gckCOMMAND object. */
+    command = Kernel->command;
+    gcmkVERIFY_OBJECT(command, gcvOBJ_COMMAND);
+
 #if gcdSECURE_USER
     /* Flush the secure mapping cache. */
     gcmkONERROR(gckOS_GetProcessID(&processID));
     gcmkONERROR(gckKERNEL_GetProcessDBCache(Kernel, processID, &cache));
     gcmkONERROR(gckKERNEL_FlushTranslationCache(Kernel, cache, gcvNULL, 0));
 #endif
-
-    gcmkONERROR(
-        gckOS_AtomicExchange(Kernel->os, Kernel->resetAtom, 1, &oldValue));
-
-    if (oldValue)
-    {
-        /* Some one else will recovery GPU. */
-        return gcvSTATUS_OK;
-    }
 
     if (Kernel->stuckDump == gcdSTUCK_DUMP_MINIMAL)
     {
@@ -3380,27 +3493,24 @@ gckKERNEL_Recovery(
         }
     }
 
-    /* Start a timer to clear reset flag, before timer is expired,
-    ** other recovery request is ignored. */
-    gcmkVERIFY_OK(
-        gckOS_StartTimer(Kernel->os,
-                         Kernel->resetFlagClearTimer,
-                         Kernel->timeOut * 39 / 40));
-
-    /* Try issuing a soft reset for the GPU. */
-    status = gckHARDWARE_Reset(hardware);
-    if (status == gcvSTATUS_NOT_SUPPORTED)
+    /* Clear queue. */
+    do
     {
-        /* Switch to OFF power.  The next submit should return the GPU to ON
-        ** state. */
-        gcmkONERROR(
-            gckHARDWARE_SetPowerManagementState(hardware,
-                                                gcvPOWER_OFF_RECOVERY));
+        status = gckENTRYQUEUE_Dequeue(&command->queue, &data);
     }
-    else
+    while (status == gcvSTATUS_OK);
+
+    /* Issuing a soft reset for the GPU. */
+    gcmkONERROR(gckHARDWARE_Reset(hardware));
+
+    mask = Kernel->restoreMask;
+
+    for (i = 0; i < 32; i++)
     {
-        /* Bail out on reset error. */
-        gcmkONERROR(status);
+        if (mask & (1 << i))
+        {
+            count++;
+        }
     }
 
     /* Handle all outstanding events now. */
@@ -3410,15 +3520,15 @@ gckKERNEL_Recovery(
     {
         for (i = 0; i < gcdMULTI_GPU; i++)
         {
-            gcmkONERROR(gckOS_AtomSet(Kernel->os, eventObj->pending3D[i], gcdEVENT_MASK));
+            gcmkONERROR(gckOS_AtomSet(Kernel->os, eventObj->pending3D[i], mask));
         }
     }
     else
     {
-        gcmkONERROR(gckOS_AtomSet(Kernel->os, eventObj->pending, gcdEVENT_MASK));
+        gcmkONERROR(gckOS_AtomSet(Kernel->os, eventObj->pending, mask));
     }
 #else
-    gcmkONERROR(gckOS_AtomSet(Kernel->os, eventObj->pending, gcdEVENT_MASK));
+    gcmkONERROR(gckOS_AtomSet(Kernel->os, eventObj->pending, mask));
 #endif
 #else
 #if gcdMULTI_GPU
@@ -3426,58 +3536,32 @@ gckKERNEL_Recovery(
     {
         for (i = 0; i < gcdMULTI_GPU; i++)
         {
-            eventObj->pending3D[i] = gcdEVENT_MASK;
+            eventObj->pending3D[i] = mask;
         }
     }
     else
     {
-        eventObj->pending = gcdEVENT_MASK;
+        eventObj->pending = mask;
     }
 #else
-    eventObj->pending = gcdEVENT_MASK;
+    eventObj->pending = mask;
 #endif
 #endif
 
 #if gcdINTERRUPT_STATISTIC
-    gcmkONERROR(gckOS_AtomSet(Kernel->os, eventObj->interruptCount, 0));
-#endif
-    gcmkONERROR(gckEVENT_Notify(eventObj, 1));
+    while (count--)
+    {
+        gcmkONERROR(gckOS_AtomDecrement(
+            Kernel->os,
+            eventObj->interruptCount,
+            &oldValue
+            ));
+    }
 
-    /* Again in case more events got submitted. */
-#if gcdSMP
-#if gcdMULTI_GPU
-    if (Kernel->core == gcvCORE_MAJOR)
-    {
-        for (i = 0; i < gcdMULTI_GPU; i++)
-        {
-            gcmkONERROR(gckOS_AtomSet(Kernel->os, eventObj->pending3D[i], gcdEVENT_MASK));
-        }
-    }
-    else
-    {
-        gcmkONERROR(gckOS_AtomSet(Kernel->os, eventObj->pending, gcdEVENT_MASK));
-    }
-#else
-    gcmkONERROR(gckOS_AtomSet(Kernel->os, eventObj->pending, gcdEVENT_MASK));
+    gckOS_AtomClearMask(Kernel->hardware->pendingEvent, mask);
 #endif
-#else
-#if gcdMULTI_GPU
-    if (Kernel->core == gcvCORE_MAJOR)
-    {
-        for (i = 0; i < gcdMULTI_GPU; i++)
-        {
-            eventObj->pending3D[i] = gcdEVENT_MASK;
-        }
-    }
-    else
-    {
-        eventObj->pending = gcdEVENT_MASK;
-    }
-#else
-    eventObj->pending = gcdEVENT_MASK;
-#endif
-#endif
-    gcmkONERROR(gckEVENT_Notify(eventObj, 2));
+
+    gcmkONERROR(gckEVENT_Notify(eventObj, 1));
 
     gcmkVERIFY_OK(gckOS_GetTime(&Kernel->resetTimeStamp));
 
@@ -3691,9 +3775,8 @@ gckKERNEL_AllocateVirtualCommandBuffer(
     gctSIZE_T pageCount;
     gctSIZE_T bytes                      = *Bytes;
     gckVIRTUAL_COMMAND_BUFFER_PTR buffer = gcvNULL;
-#if gcdPROCESS_ADDRESS_SPACE
     gckMMU mmu;
-#endif
+    gctUINT32 flag = gcvALLOC_FLAG_NON_CONTIGUOUS;
 
     gcmkHEADER_ARG("Os=0x%X InUserSpace=%d *Bytes=%lu",
                    os, InUserSpace, gcmOPT_VALUE(Bytes));
@@ -3714,8 +3797,9 @@ gckKERNEL_AllocateVirtualCommandBuffer(
     buffer->bytes = bytes;
 
     gcmkONERROR(gckOS_AllocatePagedMemoryEx(os,
-                                            gcvFALSE,
+                                            flag,
                                             bytes,
+                                            gcvNULL,
                                             &buffer->physical));
 
     if (InUserSpace)
@@ -3748,13 +3832,16 @@ gckKERNEL_AllocateVirtualCommandBuffer(
 
 #if gcdPROCESS_ADDRESS_SPACE
     gcmkONERROR(gckKERNEL_GetProcessMMU(Kernel, &mmu));
+    buffer->mmu = mmu;
+#else
+    mmu = Kernel->mmu;
+#endif
 
     gcmkONERROR(gckMMU_AllocatePages(mmu,
                                      pageCount,
                                      &buffer->pageTable,
                                      &buffer->gpuAddress));
 
-    buffer->mmu = mmu;
 
     gcmkONERROR(gckOS_MapPagesEx(os,
                                  Kernel->core,
@@ -3762,24 +3849,8 @@ gckKERNEL_AllocateVirtualCommandBuffer(
                                  pageCount,
                                  buffer->gpuAddress,
                                  buffer->pageTable));
-#else
-    gcmkONERROR(gckMMU_AllocatePages(Kernel->mmu,
-                                     pageCount,
-                                     &buffer->pageTable,
-                                     &buffer->gpuAddress));
 
-    gcmkONERROR(gckOS_MapPagesEx(os,
-                                 Kernel->core,
-                                 buffer->physical,
-                                 pageCount,
-                                 buffer->pageTable));
-#endif
-
-#if gcdPROCESS_ADDRESS_SPACE
-    gcmkONERROR(gckMMU_Flush(mmu));
-#else
-    gcmkONERROR(gckMMU_Flush(Kernel->mmu, gcvSURF_INDEX));
-#endif
+    gcmkONERROR(gckMMU_Flush(mmu, gcvSURF_INDEX));
 
     *Physical = buffer;
 
@@ -3879,6 +3950,8 @@ gckKERNEL_DestroyVirtualCommandBuffer(
     gcmkVERIFY_OK(
         gckMMU_FreePages(kernel->mmu, buffer->pageTable, buffer->pageCount));
 #endif
+
+    gcmkVERIFY_OK(gckOS_UnmapPages(os, buffer->pageCount, buffer->gpuAddress));
 
     gcmkVERIFY_OK(gckOS_FreePagedMemory(os, buffer->physical, Bytes));
 

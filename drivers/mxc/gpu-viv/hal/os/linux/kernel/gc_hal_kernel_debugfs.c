@@ -61,19 +61,19 @@
         2.a)If the debugfs is not mounted, you must do "mount -t debugfs none /sys/kernel/debug"
 
    3) To read what is being printed in the debugfs file system:
-        Ex : cat /sys/kernel/debug/gpu/galcore_trace
+        Ex : cat /sys/kernel/debug/gc/galcore_trace
 
    4)To write into the debug file system from user side :
-        Ex: echo "hello" > cat /sys/kernel/debug/gpu/galcore_trace
+        Ex: echo "hello" > cat /sys/kernel/debug/gc/galcore_trace
 
    5)To write into debugfs from kernel side, Use the function called gckDEBUGFS_Print
 
    How to Get Video Memory Usage:
    1) Select a process whose video memory usage can be dump, no need to reset it until <pid> is needed to be change.
-        echo <pid>  > /sys/kernel/debug/gpu/vidmem
+        echo <pid>  > /sys/kernel/debug/gc/vidmem
 
    2) Get video memory usage.
-        cat /sys/kernel/debug/gpu/vidmem
+        cat /sys/kernel/debug/gc/vidmem
 
    USECASE Kernel Dump:
 
@@ -151,11 +151,120 @@ typedef struct _gcsDEBUGFS_
     int isInited ;
 } gcsDEBUGFS_ ;
 
-
 /*debug file system*/
 static gcsDEBUGFS_ gc_dbgfs ;
 
+static int gc_debugfs_open(struct inode *inode, struct file *file)
+{
+    gcsINFO_NODE *node = inode->i_private;
 
+    return single_open(file, node->info->show, node);
+}
+
+static const struct file_operations gc_debugfs_operations = {
+    .owner = THIS_MODULE,
+    .open = gc_debugfs_open,
+    .read = seq_read,
+    .llseek = seq_lseek,
+    .release = single_release,
+};
+
+gceSTATUS
+gckDEBUGFS_DIR_Init(
+    IN gckDEBUGFS_DIR Dir,
+    IN struct dentry *root,
+    IN gctCONST_STRING Name
+    )
+{
+    Dir->root = debugfs_create_dir(Name, root);
+
+    if (!Dir->root)
+    {
+        return gcvSTATUS_NOT_SUPPORTED;
+    }
+
+    INIT_LIST_HEAD(&Dir->nodeList);
+
+    return gcvSTATUS_OK;
+}
+
+gceSTATUS
+gckDEBUGFS_DIR_CreateFiles(
+    IN gckDEBUGFS_DIR Dir,
+    IN gcsINFO * List,
+    IN int count,
+    IN gctPOINTER Data
+    )
+{
+    int i;
+    gcsINFO_NODE * node;
+    gceSTATUS status;
+
+    for (i = 0; i < count; i++)
+    {
+        /* Create a node. */
+        node = (gcsINFO_NODE *)kzalloc(sizeof(gcsINFO_NODE), GFP_KERNEL);
+
+        node->info   = &List[i];
+        node->device = Data;
+
+        /* Bind to a file. TODO: clean up when fail. */
+        node->entry = debugfs_create_file(
+            List[i].name, S_IRUGO|S_IWUSR, Dir->root, node, &gc_debugfs_operations);
+
+        if (!node->entry)
+        {
+            gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
+        }
+
+        list_add(&(node->head), &(Dir->nodeList));
+    }
+
+    return gcvSTATUS_OK;
+
+OnError:
+    gcmkVERIFY_OK(gckDEBUGFS_DIR_RemoveFiles(Dir, List, count));
+    return status;
+}
+
+gceSTATUS
+gckDEBUGFS_DIR_RemoveFiles(
+    IN gckDEBUGFS_DIR Dir,
+    IN gcsINFO * List,
+    IN int count
+    )
+{
+    int i;
+    gcsINFO_NODE * node;
+    gcsINFO_NODE * temp;
+
+    for (i = 0; i < count; i++)
+    {
+        list_for_each_entry_safe(node, temp, &Dir->nodeList, head)
+        {
+            if (node->info == &List[i])
+            {
+                debugfs_remove(node->entry);
+                list_del(&node->head);
+                kfree(node);
+            }
+        }
+    }
+
+    return gcvSTATUS_OK;
+}
+
+void
+gckDEBUGFS_DIR_Deinit(
+    IN gckDEBUGFS_DIR Dir
+    )
+{
+    if (Dir->root != NULL)
+    {
+        debugfs_remove(Dir->root);
+        Dir->root = NULL;
+    }
+}
 
 /*******************************************************************************
  **
@@ -546,15 +655,47 @@ _DebugFSWrite (
 
 int dumpProcess = 0;
 
-static int vidmem_show(struct seq_file *file, void *unused)
+void
+_PrintCounter(
+    struct seq_file *file,
+    gcsDATABASE_COUNTERS * counter,
+    gctCONST_STRING Name
+    )
 {
-    gctUINT32 i = 0;
-    gceSTATUS status;
-    gcsDATABASE_PTR database;
-    gcsDATABASE_COUNTERS * counter;
-    gckGALDEVICE device = file->private;
+    seq_printf(file,"Counter: %s\n", Name);
 
-    gckKERNEL kernel = device->kernels[gcvCORE_MAJOR];
+    seq_printf(file,"%-9s%10s","", "All");
+
+    seq_printf(file, "\n");
+
+    seq_printf(file,"%-9s","Current");
+
+    seq_printf(file,"%10lld", counter->bytes);
+
+    seq_printf(file, "\n");
+
+    seq_printf(file,"%-9s","Maximum");
+
+    seq_printf(file,"%10lld", counter->maxBytes);
+
+    seq_printf(file, "\n");
+
+    seq_printf(file,"%-9s","Total");
+
+    seq_printf(file,"%10lld", counter->totalBytes);
+
+    seq_printf(file, "\n");
+}
+
+void
+_ShowCounters(
+    struct seq_file *file,
+    gcsDATABASE_PTR database
+    )
+{
+    gctUINT i = 0;
+    gcsDATABASE_COUNTERS * counter;
+    gcsDATABASE_COUNTERS * nonPaged;
 
     static gctCONST_STRING surfaceTypes[] = {
         "UNKNOWN",
@@ -571,14 +712,12 @@ static int vidmem_show(struct seq_file *file, void *unused)
         "HZDepth",
     };
 
-    /* Find the database. */
-    gcmkONERROR(
-        gckKERNEL_FindDatabase(kernel, dumpProcess, gcvFALSE, &database));
-
-    seq_printf(file, "VidMem Usage (Process %d):\n", dumpProcess);
-
     /* Get pointer to counters. */
     counter = &database->vidMem;
+
+    nonPaged = &database->nonPaged;
+
+    seq_printf(file,"Counter: vidMem (for each surface type)\n");
 
     seq_printf(file,"%-9s%10s","", "All");
 
@@ -629,6 +768,87 @@ static int vidmem_show(struct seq_file *file, void *unused)
     }
 
     seq_printf(file, "\n");
+
+    seq_printf(file,"Counter: vidMem (for each pool)\n");
+
+    seq_printf(file,"%-9s%10s","", "All");
+
+    for (i = 1; i < gcvPOOL_NUMBER_OF_POOLS; i++)
+    {
+        seq_printf(file, "%10d", i);
+    }
+
+    seq_printf(file, "\n");
+
+    seq_printf(file,"%-9s","Current");
+
+    seq_printf(file,"%10lld", database->vidMem.bytes);
+
+    for (i = 1; i < gcvPOOL_NUMBER_OF_POOLS; i++)
+    {
+        counter = &database->vidMemPool[i];
+
+        seq_printf(file,"%10lld", counter->bytes);
+    }
+
+    seq_printf(file, "\n");
+
+    seq_printf(file,"%-9s","Maximum");
+
+    seq_printf(file,"%10lld", database->vidMem.maxBytes);
+
+    for (i = 1; i < gcvPOOL_NUMBER_OF_POOLS; i++)
+    {
+        counter = &database->vidMemPool[i];
+
+        seq_printf(file,"%10lld", counter->maxBytes);
+    }
+
+    seq_printf(file, "\n");
+
+    seq_printf(file,"%-9s","Total");
+
+    seq_printf(file,"%10lld", database->vidMem.totalBytes);
+
+    for (i = 1; i < gcvPOOL_NUMBER_OF_POOLS; i++)
+    {
+        counter = &database->vidMemPool[i];
+
+        seq_printf(file,"%10lld", counter->totalBytes);
+    }
+
+    seq_printf(file, "\n");
+
+    /* Print nonPaged. */
+    _PrintCounter(file, &database->nonPaged, "nonPaged");
+    _PrintCounter(file, &database->contiguous, "contiguous");
+    _PrintCounter(file, &database->mapUserMemory, "mapUserMemory");
+    _PrintCounter(file, &database->mapMemory, "mapMemory");
+}
+
+gckKERNEL
+_GetValidKernel(
+    gckGALDEVICE Device
+);
+static int vidmem_show(struct seq_file *file, void *unused)
+{
+    gceSTATUS status;
+    gcsDATABASE_PTR database;
+    gckGALDEVICE device = file->private;
+
+    gckKERNEL kernel = _GetValidKernel(device);
+    if(kernel == gcvNULL)
+    {
+        return 0;
+    }
+
+    /* Find the database. */
+    gcmkONERROR(
+        gckKERNEL_FindDatabase(kernel, dumpProcess, gcvFALSE, &database));
+
+    seq_printf(file, "VidMem Usage (Process %d):\n", dumpProcess);
+
+    _ShowCounters(file, database);
 
     return 0;
 
@@ -771,7 +991,7 @@ gctINT
 gckDEBUGFS_CreateNode (
     IN gctPOINTER Device,
     IN gctINT SizeInKB ,
-    IN gctCONST_STRING ParentName ,
+    IN struct dentry * Root ,
     IN gctCONST_STRING NodeName ,
     OUT gcsDEBUGFS_Node **Node
     )
@@ -800,7 +1020,7 @@ gckDEBUGFS_CreateNode (
     /*End the sync primitives*/
 
     /*creating the debug file system*/
-    node->parent = debugfs_create_dir(ParentName, NULL);
+    node->parent = Root;
 
     if (SizeInKB)
     {
@@ -820,6 +1040,7 @@ gckDEBUGFS_CreateNode (
     /* add it to our linked list */
     node->next = gc_dbgfs.linkedlist ;
     gc_dbgfs.linkedlist = node ;
+
 
     /* pass the struct back */
     *Node = node ;
@@ -869,10 +1090,6 @@ gckDEBUGFS_FreeNode (
     if ( Node->filen )
     {
         debugfs_remove ( Node->filen ) ;
-    }
-    if ( Node->parent )
-    {
-        debugfs_remove ( Node->parent ) ;
     }
 
     /* now delete the node from the linked list */
