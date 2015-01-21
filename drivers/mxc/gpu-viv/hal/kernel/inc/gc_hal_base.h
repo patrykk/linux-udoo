@@ -18,7 +18,6 @@
 *
 *****************************************************************************/
 
-
 #ifndef __gc_hal_base_h_
 #define __gc_hal_base_h_
 
@@ -40,7 +39,7 @@ typedef struct _gcoOS *                 gcoOS;
 typedef struct _gco2D *                 gco2D;
 typedef struct gcsATOM *                gcsATOM_PTR;
 
-#ifndef VIVANTE_NO_3D
+#if gcdENABLE_3D
 typedef struct _gco3D *                 gco3D;
 typedef struct _gcoCL *                 gcoCL;
 typedef struct _gcsFAST_FLUSH *         gcsFAST_FLUSH_PTR;
@@ -57,6 +56,7 @@ typedef struct _gcsBOUNDARY *           gcsBOUNDARY_PTR;
 typedef struct _gcoDUMP *               gcoDUMP;
 typedef struct _gcoHARDWARE *           gcoHARDWARE;
 typedef union  _gcuVIDMEM_NODE *        gcuVIDMEM_NODE_PTR;
+typedef struct _gcsVIDMEM_NODE *        gckVIDMEM_NODE;
 
 #if gcdENABLE_VG
 typedef struct _gcoVG *                 gcoVG;
@@ -81,7 +81,7 @@ typedef struct _gcoOS_SymbolsList gcoOS_SymbolsList;
 
 typedef struct _gcsPLS * gcsPLS_PTR;
 
-#ifndef VIVANTE_NO_3D
+#if gcdENABLE_3D
 /******************************************************************************
 **
 ** Patch defines which should be moved to dedicate file later
@@ -90,6 +90,7 @@ typedef struct _gcsPLS * gcsPLS_PTR;
 *******************************************************************************/
 typedef enum _gcePATCH_ID
 {
+    gcvPATCH_NOTINIT = -1,
     gcvPATCH_INVALID = 0,
 
 #if gcdDEBUG_OPTION
@@ -167,10 +168,21 @@ typedef enum _gcePATCH_ID
     gcvPATCH_AFTERBURNER,
     gcvPATCH_UIMARK,
     gcvPATCH_FM_OES_PLAYER,
+    gcvPATCH_SUMSUNG_BENCH,
+    gcvPATCH_ROCKSTAR_MAXPAYNE,
+    gcvPATCH_TITANPACKING,
+    gcvPATCH_BASEMARKOSIICN,
+    gcvPATCH_FRUITNINJA,
+#if defined(ANDROID)
+    gcePATCH_ANDROID_CTS_MEDIA_PRESENTATIONTIME,
+#endif
+    gcvPATCH_ANDROID_COMPOSITOR,
+    gcvPATCH_CTS_TEXTUREVIEW,
+    gcvPATCH_WATER2_CHUKONG,
 
     gcvPATCH_COUNT
 } gcePATCH_ID;
-#endif /* VIVANTE_NO_3D */
+#endif /* gcdENABLE_3D */
 
 typedef void (* gctPLS_DESTRUCTOR) (
     gcsPLS_PTR
@@ -220,7 +232,7 @@ typedef struct _gcsPLS
     ** We can use this mutex for every PLS access.
     */
     gctPOINTER                  accessLock;
-#ifndef VIVANTE_NO_3D
+#if gcdENABLE_3D
     /* Global patchID to overwrite the detection */
     gcePATCH_ID                 patchID;
 #endif
@@ -229,7 +241,7 @@ gcsPLS;
 
 extern gcsPLS gcPLS;
 
-#ifndef VIVANTE_NO_3D
+#if gcdENABLE_3D
 #define gcPLS_INITIALIZER \
 { \
     gcvNULL,         /* gcoOS object.      */ \
@@ -253,7 +265,7 @@ extern gcsPLS gcPLS;
     gcvFALSE,        /* Special flag for NP2 texture. */ \
     gcvNULL,         /* destructor        */ \
     gcvNULL,         /* accessLock        */ \
-    gcvPATCH_INVALID,/* global patchID    */ \
+    gcvPATCH_NOTINIT,/* global patchID    */ \
 }
 #else
 #define gcPLS_INITIALIZER \
@@ -308,10 +320,12 @@ typedef struct _gcsTLS
     gcoVGHARDWARE               vg;
     gcoVG                       engineVG;
 #endif /* gcdENABLE_VG */
-#ifndef VIVANTE_NO_3D
+#if gcdENABLE_3D
     gco3D                       engine3D;
 #endif
+#if gcdENABLE_2D
     gco2D                       engine2D;
+#endif
 
     /*thread data */
     gctPOINTER                  context;
@@ -323,6 +337,9 @@ typedef struct _gcsTLS
 
     /* libGAL.so handle */
     gctHANDLE                   handle;
+
+    /* If true, do not releas 2d engine and hardware in hal layer */
+    gctBOOL                     release2DUpper;
 }
 gcsTLS;
 
@@ -352,14 +369,12 @@ typedef enum _gcePOOL
     gcvPOOL_VIRTUAL,
     gcvPOOL_USER,
     gcvPOOL_CONTIGUOUS,
-    gcvPOOL_DEFAULT_FORCE_CONTIGUOUS,
-    gcvPOOL_DEFAULT_FORCE_CONTIGUOUS_CACHEABLE,
 
     gcvPOOL_NUMBER_OF_POOLS
 }
 gcePOOL;
 
-#ifndef VIVANTE_NO_3D
+#if gcdENABLE_3D
 /* Blending functions. */
 typedef enum _gceBLEND_FUNCTION
 {
@@ -392,6 +407,17 @@ typedef enum _gceBLEND_MODE
 }
 gceBLEND_MODE;
 
+/* Depth modes. */
+typedef enum _gceDEPTH_MODE
+{
+    gcvDEPTH_NONE,
+    gcvDEPTH_Z,
+    gcvDEPTH_W,
+}
+gceDEPTH_MODE;
+#endif /* gcdENABLE_3D */
+
+#if (gcdENABLE_3D || gcdENABLE_VG)
 /* API flags. */
 typedef enum _gceAPI
 {
@@ -404,16 +430,8 @@ typedef enum _gceAPI
     gcvAPI_OPENCL,
 }
 gceAPI;
+#endif
 
-/* Depth modes. */
-typedef enum _gceDEPTH_MODE
-{
-    gcvDEPTH_NONE,
-    gcvDEPTH_Z,
-    gcvDEPTH_W,
-}
-gceDEPTH_MODE;
-#endif /* VIVANTE_NO_3D */
 
 typedef enum _gceWHERE
 {
@@ -437,8 +455,6 @@ typedef enum _gceSignalHandlerType
 }
 gceSignalHandlerType;
 
-
-#if gcdENABLE_VG
 /* gcsHAL_Limits*/
 typedef struct _gcsHAL_LIMITS
 {
@@ -455,7 +471,6 @@ typedef struct _gcsHAL_LIMITS
     gctUINT32         maxSamples;
 
 }gcsHAL_LIMITS;
-#endif
 
 /******************************************************************************\
 *********** Generic Memory Allocation Optimization Using Containers ************
@@ -558,20 +573,14 @@ gcoHAL_GetOption(
      IN gceOPTION Option
      );
 
-/* Get pointer to gco2D object. */
 gceSTATUS
-gcoHAL_Get2DEngine(
+gcoHAL_FrameInfoOps(
     IN gcoHAL Hal,
-    OUT gco2D * Engine
+    IN gceFRAMEINFO FrameInfo,
+    IN gceFRAMEINFO_OP Op,
+    IN OUT gctUINT * Val
     );
 
-#ifndef VIVANTE_NO_3D
-gceSTATUS
-gcoHAL_GetSpecialHintData(
-    IN gcoHAL Hal,
-    OUT gctINT * Hint
-    );
-#endif
 
 gceSTATUS
 gcoHAL_GetHardware(
@@ -579,7 +588,21 @@ gcoHAL_GetHardware(
     OUT gcoHARDWARE* Hw
     );
 
-#ifndef VIVANTE_NO_3D
+#if gcdENABLE_2D
+/* Get pointer to gco2D object. */
+gceSTATUS
+gcoHAL_Get2DEngine(
+    IN gcoHAL Hal,
+    OUT gco2D * Engine
+    );
+#endif
+
+#if gcdENABLE_3D
+gceSTATUS
+gcoHAL_GetSpecialHintData(
+    IN gcoHAL Hal,
+    OUT gctINT * Hint
+    );
 /*
 ** Deprecated(Don't use it), keep it here for external library(libgcu.so)
 */
@@ -588,7 +611,14 @@ gcoHAL_Get3DEngine(
     IN gcoHAL Hal,
     OUT gco3D * Engine
     );
-#endif /* VIVANTE_NO_3D */
+#endif /* gcdEANBLE_3D */
+
+
+gceSTATUS
+gcoHAL_GetProductName(
+    IN gcoHAL Hal,
+    OUT gctSTRING *ProductName
+    );
 
 gceSTATUS
 gcoHAL_SetFscaleValue(
@@ -617,6 +647,12 @@ gceSTATUS
 gcoHAL_ImportVideoMemory(
     IN gctUINT32 Name,
     OUT gctUINT32 * Handle
+    );
+
+gceSTATUS
+gcoHAL_GetVideoMemoryFd(
+    IN gctUINT32 Handle,
+    OUT gctINT * Fd
     );
 
 /* Verify whether the specified feature is available in hardware. */
@@ -654,6 +690,13 @@ gceSTATUS gcoHAL_QueryChipMinorFeatures(
     OUT gctUINT32* NumFeatures,
     OUT gctUINT32* ChipMinorFeatures
     );
+
+gctINT32
+gcoOS_EndRecordAllocation(void);
+void
+gcoOS_RecordAllocation(void);
+void
+gcoOS_AddRecordAllocation(gctSIZE_T Size);
 
 /* Query the amount of video memory. */
 gceSTATUS
@@ -713,6 +756,17 @@ gcoOS_FreeVideoMemory(
     IN gctPOINTER Handle
     );
 
+/* Lock video memory. */
+gceSTATUS
+gcoOS_LockVideoMemory(
+    IN gcoOS Os,
+    IN gctPOINTER Handle,
+    IN gctBOOL InUserSpace,
+    IN gctBOOL InCacheable,
+    OUT gctUINT32 * Physical,
+    OUT gctPOINTER * Logical
+    );
+
 /* Map user memory. */
 gceSTATUS
 gcoHAL_MapUserMemory(
@@ -749,13 +803,13 @@ gcoHAL_Commit(
     IN gctBOOL Stall
     );
 
-#ifndef VIVANTE_NO_3D
+#if gcdENABLE_3D
 /* Sencd fence command. */
 gceSTATUS
 gcoHAL_SendFence(
     IN gcoHAL Hal
     );
-#endif /* VIVANTE_NO_3D */
+#endif /* gcdENABLE_3D */
 
 /* Query the tile capabilities. */
 gceSTATUS
@@ -811,7 +865,7 @@ gcoHAL_GetDump(
     OUT gcoDUMP * Dump
     );
 
-#ifndef VIVANTE_NO_3D
+#if gcdENABLE_3D
 gceSTATUS
 gcoHAL_SetPatchID(
     IN  gcoHAL Hal,
@@ -830,7 +884,7 @@ gcoHAL_SetGlobalPatchID(
     IN  gcoHAL Hal,
     IN  gcePATCH_ID PatchID
     );
-#endif /* VIVANTE_NO_3D */
+#endif /* gcdENABLE_3D */
 /* Call the kernel HAL layer. */
 gceSTATUS
 gcoHAL_Call(
@@ -916,20 +970,19 @@ gcoHAL_GetVGEngine(
     OUT gcoVG * Engine
     );
 
-#if gcdENABLE_VG
 gceSTATUS
 gcoHAL_QueryChipLimits(
     IN gcoHAL           Hal,
     IN gctINT32         Chip,
+    IN gctINT32         Mask,
     OUT gcsHAL_LIMITS   *Limits);
 
 gceSTATUS
 gcoHAL_QueryChipFeature(
     IN gcoHAL       Hal,
     IN gctINT32     Chip,
+    IN gctINT32     Mask,
     IN gceFEATURE   Feature);
-
-#endif
 
 /*----------------------------------------------------------------------------*/
 /*----- Shared Buffer --------------------------------------------------------*/
@@ -970,6 +1023,23 @@ gcoHAL_ReadShBuffer(
     OUT gctUINT32 * BytesRead
     );
 
+/* Config power management to be enabled or disabled. */
+gceSTATUS
+gcoHAL_ConfigPowerManagement(
+    IN gctBOOL Enable
+    );
+
+#if gcdENABLE_3D || gcdENABLE_VG
+/* Query the target capabilities. */
+gceSTATUS
+gcoHAL_QueryTargetCaps(
+    IN gcoHAL Hal,
+    OUT gctUINT * MaxWidth,
+    OUT gctUINT * MaxHeight,
+    OUT gctUINT * MultiTargetCount,
+    OUT gctUINT * MaxSamples
+    );
+#endif
 
 /******************************************************************************\
 ********************************** gcoOS Object *********************************
@@ -1563,6 +1633,22 @@ gceSTATUS
 gcoOS_AtomDestroy(
     IN gcoOS Os,
     IN gcsATOM_PTR Atom
+    );
+
+/* Get the 32-bit value protected by an atom. */
+gceSTATUS
+gcoOS_AtomGet(
+    IN gcoOS Os,
+    IN gcsATOM_PTR Atom,
+    OUT gctINT32_PTR Value
+    );
+
+/* Set the 32-bit value protected by an atom. */
+gceSTATUS
+gcoOS_AtomSet(
+    IN gcoOS Os,
+    IN gcsATOM_PTR Atom,
+    IN gctINT32 Value
     );
 
 /* Increment an atom. */
@@ -2308,10 +2394,22 @@ gcoSURF_IsValid(
     IN gcoSURF Surface
     );
 
-#ifndef VIVANTE_NO_3D
+#if gcdENABLE_3D
 /* Verify and return the state of the tile status mechanism. */
 gceSTATUS
 gcoSURF_IsTileStatusSupported(
+    IN gcoSURF Surface
+    );
+
+/* Verify if surface has tile status enabled. */
+gceSTATUS
+gcoSURF_IsTileStatusEnabled(
+    IN gcoSURF Surface
+    );
+
+/* Verify if surface is compressed. */
+gceSTATUS
+gcoSURF_IsCompressed(
     IN gcoSURF Surface
     );
 
@@ -2341,7 +2439,7 @@ gcoSURF_FlushTileStatus(
     IN gcoSURF Surface,
     IN gctBOOL Decompress
     );
-#endif /* VIVANTE_NO_3D */
+#endif /* gcdENABLE_3D */
 
 /* Get surface size. */
 gceSTATUS
@@ -2681,6 +2779,29 @@ gceSTATUS
 gcoSURF_PopSharedInfo(
     IN gcoSURF Surface
     );
+
+#if (gcdENABLE_3D || gcdENABLE_VG)
+/* Copy surface. */
+gceSTATUS
+gcoSURF_Copy(
+    IN gcoSURF Surface,
+    IN gcoSURF Source
+    );
+
+/* Set number of samples for a gcoSURF object. */
+gceSTATUS
+gcoSURF_SetSamples(
+    IN gcoSURF Surface,
+    IN gctUINT Samples
+    );
+
+/* Get the number of samples per pixel. */
+gceSTATUS
+gcoSURF_GetSamples(
+    IN gcoSURF Surface,
+    OUT gctUINT_PTR Samples
+    );
+#endif
 
 /******************************************************************************\
 ********************************* gcoDUMP Object ********************************
@@ -4392,28 +4513,24 @@ gckOS_DebugStatus2Name(
 #define gcmkSAFECASTSIZET(x, y) \
     do \
     { \
+        gctUINT32 tmp = (gctUINT32)(y); \
         if (gcmSIZEOF(gctSIZE_T) > gcmSIZEOF(gctUINT32)) \
         { \
-            if (y) \
-            { \
-                gcmkASSERT((y) <= gcvMAXUINT32); \
+            gcmkASSERT(tmp <= gcvMAXUINT32); \
             } \
-        } \
-        (x) = (gctUINT32)(y); \
+        (x) = tmp; \
     } \
     while (gcvFALSE)
 
 #define gcmSAFECASTSIZET(x, y) \
     do \
     { \
+        gctUINT32 tmp = (gctUINT32)(y); \
         if (gcmSIZEOF(gctSIZE_T) > gcmSIZEOF(gctUINT32)) \
         { \
-            if (y) \
-            { \
-                gcmASSERT((y) <= gcvMAXUINT32); \
+            gcmASSERT(tmp <= gcvMAXUINT32); \
             } \
-        } \
-        (x) = (gctUINT32)(y); \
+        (x) = tmp; \
     } \
     while (gcvFALSE)
 
@@ -4618,7 +4735,7 @@ gcGetUserDebugOption(
 #if defined(ANDROID)
 struct _gcoOS_SymbolsList
 {
-#ifndef VIVANTE_NO_3D
+#if gcdENABLE_3D
     gcePATCH_ID patchId;
 #endif
     const char * symList[10];
@@ -5290,6 +5407,7 @@ struct _gcoOS_SymbolsList
 **
 **      Configure uniforms according to chip and numConstants.
 */
+#if !gcdENABLE_UNIFIED_CONSTANT
 #define gcmCONFIGUREUNIFORMS(ChipModel, ChipRevision, NumConstants, \
              UnifiedConst, VsConstBase, PsConstBase, VsConstMax, PsConstMax, ConstMax) \
 { \
@@ -5349,61 +5467,39 @@ struct _gcoOS_SymbolsList
         ConstMax     = 232; \
     } \
 }
-
-/*******************************************************************************
-**
-**  gcmGET_UNIFORM_INFO_FOR_NONUNIFIEDMODE
-**
-**      Configure uniforms according to chip and numConstants.
-*/
-#define gcmGET_UNIFORM_INFO_FOR_NONUNIFIEDMODE(ChipModel, ChipRevision, NumConstants, \
+#else
+#define gcmCONFIGUREUNIFORMS(ChipModel, ChipRevision, NumConstants, \
              UnifiedConst, VsConstBase, PsConstBase, VsConstMax, PsConstMax, ConstMax) \
 { \
-    if (ChipModel == gcv2000 && ChipRevision == 0x5118) \
+    if (NumConstants > 256) \
     { \
-        UnifiedConst = gcvFALSE; \
-        VsConstBase  = AQVertexShaderConstRegAddrs; \
-        PsConstBase  = AQPixelShaderConstRegAddrs; \
+        UnifiedConst = gcvTRUE; \
+        VsConstBase  = gcregSHUniformsRegAddrs; \
+        PsConstBase  = gcregSHUniformsRegAddrs; \
+        ConstMax     = NumConstants; \
         VsConstMax   = 256; \
-        PsConstMax   = 64; \
-        ConstMax     = 320; \
-    } \
-    else if (NumConstants == 320) \
-    { \
-        UnifiedConst = gcvFALSE; \
-        VsConstBase  = AQVertexShaderConstRegAddrs; \
-        PsConstBase  = AQPixelShaderConstRegAddrs; \
-        VsConstMax   = 256; \
-        PsConstMax   = 64; \
-        ConstMax     = 320; \
-    } \
-    /* All GC1000 series chips can only support 64 uniforms for ps on non-unified const mode. */ \
-    else if (NumConstants > 256 && ChipModel == gcv1000) \
-    { \
-        UnifiedConst = gcvFALSE; \
-        VsConstBase  = AQVertexShaderConstRegAddrs; \
-        PsConstBase  = AQPixelShaderConstRegAddrs; \
-        VsConstMax   = 256; \
-        PsConstMax   = 64; \
-        ConstMax     = 320; \
-    } \
-    else if (NumConstants > 256) \
-    { \
-        UnifiedConst = gcvFALSE; \
-        VsConstBase  = AQVertexShaderConstRegAddrs; \
-        PsConstBase  = AQPixelShaderConstRegAddrs; \
-        VsConstMax   = 256; \
-        PsConstMax   = 256; \
-        ConstMax     = 512; \
+        PsConstMax   = ConstMax - VsConstMax; \
     } \
     else if (NumConstants == 256) \
     { \
-        UnifiedConst = gcvFALSE; \
-        VsConstBase  = AQVertexShaderConstRegAddrs; \
-        PsConstBase  = AQPixelShaderConstRegAddrs; \
-        VsConstMax   = 256; \
-        PsConstMax   = 256; \
-        ConstMax     = 512; \
+        if (ChipModel == gcv2000 && ChipRevision == 0x5118) \
+        { \
+            UnifiedConst = gcvFALSE; \
+            VsConstBase  = AQVertexShaderConstRegAddrs; \
+            PsConstBase  = AQPixelShaderConstRegAddrs; \
+            VsConstMax   = 256; \
+            PsConstMax   = 64; \
+            ConstMax     = 320; \
+        } \
+        else \
+        { \
+            UnifiedConst = gcvFALSE; \
+            VsConstBase  = AQVertexShaderConstRegAddrs; \
+            PsConstBase  = AQPixelShaderConstRegAddrs; \
+            VsConstMax   = 256; \
+            PsConstMax   = 256; \
+            ConstMax     = 512; \
+        } \
     } \
     else \
     { \
@@ -5415,6 +5511,7 @@ struct _gcoOS_SymbolsList
         ConstMax     = 232; \
     } \
 }
+#endif
 
 #ifdef __cplusplus
 }

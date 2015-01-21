@@ -72,10 +72,12 @@
 
 #define countof(a)                    (sizeof(a) / sizeof(a[0]))
 
+#ifndef DEVICE_NAME
 #ifdef CONFIG_DOVE_GPU
 #   define DEVICE_NAME              "dove_gpu"
 #else
 #   define DEVICE_NAME              "galcore"
+#endif
 #endif
 
 #define GetPageCount(size, offset)     ((((size) + ((offset) & ~PAGE_CACHE_MASK)) + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT)
@@ -105,28 +107,10 @@
 #define gcdNOWARN 0
 #endif
 
-#define gcdUSE_NON_PAGED_MEMORY_CACHE 0
-
 /******************************************************************************\
 ********************************** Structures **********************************
 \******************************************************************************/
-#if gcdUSE_NON_PAGED_MEMORY_CACHE
-typedef struct _gcsNonPagedMemoryCache
-{
-#ifndef NO_DMA_COHERENT
-    gctINT                           size;
-    gctSTRING                        addr;
-    dma_addr_t                       dmaHandle;
-#else
-    long                             order;
-    struct page *                    page;
-#endif
-
-    struct _gcsNonPagedMemoryCache * prev;
-    struct _gcsNonPagedMemoryCache * next;
-}
-gcsNonPagedMemoryCache;
-#endif /* gcdUSE_NON_PAGED_MEMORY_CACHE */
+typedef struct _gcsIOMMU * gckIOMMU;
 
 typedef struct _gcsUSER_MAPPING * gcsUSER_MAPPING_PTR;
 typedef struct _gcsUSER_MAPPING
@@ -197,12 +181,6 @@ struct _gckOS
     gcsUSER_MAPPING_PTR         userMap;
     gctPOINTER                  debugLock;
 
-#if gcdUSE_NON_PAGED_MEMORY_CACHE
-    gctUINT                      cacheSize;
-    gcsNonPagedMemoryCache *     cacheHead;
-    gcsNonPagedMemoryCache *     cacheTail;
-#endif
-
     /* workqueue for os timer. */
     struct workqueue_struct *   workqueue;
 
@@ -214,6 +192,8 @@ struct _gckOS
 
     struct list_head            allocatorList;
 
+    gcsDEBUGFS_DIR              allocatorDebugfsDir;
+
     /* Lock for register access check. */
     struct mutex                registerAccessLocks[gcdMAX_GPU_COUNT];
 
@@ -223,7 +203,8 @@ struct _gckOS
     /* External clock states. */
     gctBOOL                     clockStates[gcdMAX_GPU_COUNT];
 
-    gctPOINTER                  vidmemMutex;
+    /* IOMMU. */
+    gckIOMMU                    iommu;
 };
 
 typedef struct _gcsSIGNAL * gcsSIGNAL_PTR;
@@ -386,6 +367,33 @@ is_vmalloc_addr(
 }
 #endif
 
+#ifdef CONFIG_IOMMU_SUPPORT
+void
+gckIOMMU_Destory(
+    IN gckOS Os,
+    IN gckIOMMU Iommu
+    );
 
+gceSTATUS
+gckIOMMU_Construct(
+    IN gckOS Os,
+    OUT gckIOMMU * Iommu
+    );
+
+gceSTATUS
+gckIOMMU_Map(
+    IN gckIOMMU Iommu,
+    IN gctUINT32 DomainAddress,
+    IN gctUINT32 Physical,
+    IN gctUINT32 Bytes
+    );
+
+gceSTATUS
+gckIOMMU_Unmap(
+    IN gckIOMMU Iommu,
+    IN gctUINT32 DomainAddress,
+    IN gctUINT32 Bytes
+    );
+#endif
 
 #endif /* __gc_hal_kernel_linux_h_ */

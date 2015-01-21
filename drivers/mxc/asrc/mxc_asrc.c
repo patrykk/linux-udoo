@@ -659,18 +659,12 @@ static void asrc_input_dma_callback(void *data)
 {
 	struct asrc_pair_params *params = (struct asrc_pair_params *)data;
 
-	dma_unmap_sg(NULL, params->input_sg, params->input_sg_nodes,
-			DMA_MEM_TO_DEV);
-
 	complete(&params->input_complete);
 }
 
 static void asrc_output_dma_callback(void *data)
 {
 	struct asrc_pair_params *params = (struct asrc_pair_params *)data;
-
-	dma_unmap_sg(NULL, params->output_sg, params->output_sg_nodes,
-			DMA_DEV_TO_MEM);
 
 	complete(&params->output_complete);
 }
@@ -843,13 +837,13 @@ static int imx_asrc_dma_config(struct asrc_pair_params *params,
 		slave_config.dst_addr = dma_addr;
 		slave_config.dst_addr_width = buswidth;
 		slave_config.dst_maxburst =
-			params->input_wm * params->channel_nums / buswidth;
+			params->input_wm * params->channel_nums;
 	} else {
 		slave_config.direction = DMA_DEV_TO_MEM;
 		slave_config.src_addr = dma_addr;
 		slave_config.src_addr_width = buswidth;
 		slave_config.src_maxburst =
-			params->output_wm * params->channel_nums / buswidth;
+			params->output_wm * params->channel_nums;
 	}
 	ret = dmaengine_slave_config(chan, &slave_config);
 	if (ret) {
@@ -1002,13 +996,21 @@ int mxc_asrc_process_buffer_pre(struct completion *complete,
 		return -ETIME;
 	} else if (signal_pending(current)) {
 		pair_err("%sput task forcibly aborted\n", in ? "in" : "out");
-		return -ERESTARTSYS;
+		return -EBUSY;
 	}
 
 	init_completion(complete);
 
 	return 0;
 }
+
+#define mxc_asrc_dma_umap(params) \
+	do { \
+		dma_unmap_sg(NULL, params->input_sg, params->input_sg_nodes, \
+				DMA_MEM_TO_DEV); \
+		dma_unmap_sg(NULL, params->output_sg, params->output_sg_nodes, \
+				DMA_DEV_TO_MEM); \
+	} while (0)
 
 int mxc_asrc_process_buffer(struct asrc_pair_params *params,
 			struct asrc_convert_buffer *pbuf)
@@ -1017,15 +1019,21 @@ int mxc_asrc_process_buffer(struct asrc_pair_params *params,
 	unsigned long lock_flags;
 	int ret;
 
-	/* Ouput task should be finished earilier */
-	ret = mxc_asrc_process_buffer_pre(&params->output_complete, index, false);
-	if (ret)
+	/* Check input task first */
+	ret = mxc_asrc_process_buffer_pre(&params->input_complete, index, false);
+	if (ret) {
+		mxc_asrc_dma_umap(params);
 		return ret;
+	}
 
-	/* ...then input task*/
-	ret = mxc_asrc_process_buffer_pre(&params->input_complete, index, true);
-	if (ret)
+	/* ...then output task*/
+	ret = mxc_asrc_process_buffer_pre(&params->output_complete, index, true);
+	if (ret) {
+		mxc_asrc_dma_umap(params);
 		return ret;
+	}
+
+	mxc_asrc_dma_umap(params);
 
 	pbuf->input_buffer_length = params->input_dma_total.length;
 	pbuf->output_buffer_length = params->output_dma_total.length;
@@ -1035,8 +1043,9 @@ int mxc_asrc_process_buffer(struct asrc_pair_params *params,
 		spin_unlock_irqrestore(&pair_lock, lock_flags);
 		return -EFAULT;
 	}
-	asrc_read_output_FIFO(params);
 	spin_unlock_irqrestore(&pair_lock, lock_flags);
+
+	asrc_read_output_FIFO(params);
 
 	if (copy_to_user((void __user *)pbuf->output_buffer_vaddr,
 			 params->output_dma_total.dma_vaddr,
@@ -1109,11 +1118,6 @@ static void asrc_polling_debug(struct asrc_pair_params *params)
 	params->output_dma_total.length = t_size * params->channel_nums * 4;
 	params->output_last_period.length = 0;
 
-	dma_unmap_sg(NULL, params->input_sg, params->input_sg_nodes,
-			DMA_MEM_TO_DEV);
-	dma_unmap_sg(NULL, params->output_sg, params->output_sg_nodes,
-			DMA_DEV_TO_MEM);
-
 	complete(&params->input_complete);
 }
 #else
@@ -1157,6 +1161,7 @@ static void mxc_asrc_submit_dma(struct asrc_pair_params *params)
 static long asrc_ioctl_req_pair(struct asrc_pair_params *params,
 				void __user *user)
 {
+	unsigned long lock_flags;
 	struct asrc_req req;
 	long ret;
 
@@ -1172,7 +1177,9 @@ static long asrc_ioctl_req_pair(struct asrc_pair_params *params,
 		return ret;
 	}
 
+	spin_lock_irqsave(&pair_lock, lock_flags);
 	params->pair_hold = 1;
+	spin_unlock_irqrestore(&pair_lock, lock_flags);
 	params->index = req.index;
 	params->channel_nums = req.chn_num;
 
@@ -1229,7 +1236,11 @@ static long asrc_ioctl_config_pair(struct asrc_pair_params *params,
 	params->input_sample_rate = config.input_sample_rate;
 	params->output_sample_rate = config.output_sample_rate;
 
-	params->last_period_sample = ASRC_OUTPUT_LAST_SAMPLE_DEFAULT;
+	if (params->output_sample_rate > params->input_sample_rate)
+		params->last_period_sample = ASRC_OUTPUT_LAST_SAMPLE_DEFAULT_MAX;
+	else
+		params->last_period_sample = ASRC_OUTPUT_LAST_SAMPLE_DEFAULT;
+
 
 	ret = mxc_allocate_dma_buf(params);
 	if (ret) {
@@ -1249,9 +1260,6 @@ static long asrc_ioctl_config_pair(struct asrc_pair_params *params,
 		pair_err("failed to request output task dma channel\n");
 		return  -EBUSY;
 	}
-
-	init_completion(&params->input_complete);
-	init_completion(&params->output_complete);
 
 	ret = copy_to_user(user, &config, sizeof(config));
 	if (ret) {
@@ -1468,6 +1476,7 @@ static long asrc_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static int mxc_asrc_open(struct inode *inode, struct file *file)
 {
 	struct asrc_pair_params *params;
+	unsigned long lock_flags;
 	int i = 0, ret = 0;
 
 	ret = signal_pending(current);
@@ -1492,7 +1501,12 @@ static int mxc_asrc_open(struct inode *inode, struct file *file)
 		return -EBUSY;
 	}
 
+	init_completion(&params->input_complete);
+	init_completion(&params->output_complete);
+
+	spin_lock_irqsave(&pair_lock, lock_flags);
 	asrc->params[i] = params;
+	spin_unlock_irqrestore(&pair_lock, lock_flags);
 
 	return ret;
 }
@@ -1505,9 +1519,11 @@ static int mxc_asrc_close(struct inode *inode, struct file *file)
 
 	params = file->private_data;
 
+	spin_lock_irqsave(&pair_lock, lock_flags);
 	for (i = 0; i < ASRC_PAIR_MAX_NUM; i++)
 		if (asrc->params[i] == params)
 			asrc->params[i] = NULL;
+	spin_unlock_irqrestore(&pair_lock, lock_flags);
 
 	if (!params)
 		return 0;
@@ -1524,8 +1540,8 @@ static int mxc_asrc_close(struct inode *inode, struct file *file)
 		complete(&params->output_complete);
 	}
 
+	spin_lock_irqsave(&pair_lock, lock_flags);
 	if (params->pair_hold) {
-		spin_lock_irqsave(&pair_lock, lock_flags);
 		params->pair_hold = 0;
 		spin_unlock_irqrestore(&pair_lock, lock_flags);
 
@@ -1538,9 +1554,13 @@ static int mxc_asrc_close(struct inode *inode, struct file *file)
 
 		asrc_release_pair(params->index);
 		asrc_finish_conv(params->index);
+	} else {
+		spin_unlock_irqrestore(&pair_lock, lock_flags);
 	}
 
+	spin_lock_irqsave(&pair_lock, lock_flags);
 	kfree(params);
+	spin_unlock_irqrestore(&pair_lock, lock_flags);
 	file->private_data = NULL;
 
 	return 0;
@@ -1633,7 +1653,8 @@ static int asrc_write_proc_attr(struct file *file, const char __user *buffer,
 	if (na + nb + nc > total) {
 		dev_err(asrc->dev, "don't surpass %d for total\n", total);
 		return -EINVAL;
-	} else if (na % 2 != 0 || nb % 2 != 0 || nc % 2 != 0) {
+	} else if (asrc->channel_bits < 4 &&
+		   (na % 2 != 0 || nb % 2 != 0 || nc % 2 != 0)) {
 		dev_err(asrc->dev, "please set an even number for each pair\n");
 		return -EINVAL;
 	} else if (na < 0 || nb < 0 || nc < 0) {
@@ -1951,21 +1972,30 @@ static int mxc_asrc_remove(struct platform_device *pdev)
 static int mxc_asrc_suspend(struct device *dev)
 {
 	struct asrc_pair_params *params;
+	unsigned long lock_flags;
 	int i;
 
 	for (i = 0; i < ASRC_PAIR_MAX_NUM; i++) {
+		spin_lock_irqsave(&pair_lock, lock_flags);
+
 		params = asrc->params[i];
-		if (!params)
+		if (!params || !params->pair_hold) {
+			spin_unlock_irqrestore(&pair_lock, lock_flags);
 			continue;
+		}
 
 		if (!completion_done(&params->input_complete)) {
-			dmaengine_terminate_all(params->input_dma_channel);
+			if (params->input_dma_channel)
+				dmaengine_terminate_all(params->input_dma_channel);
 			asrc_input_dma_callback((void *)params);
 		}
 		if (!completion_done(&params->output_complete)) {
-			dmaengine_terminate_all(params->output_dma_channel);
+			if (params->output_dma_channel)
+				dmaengine_terminate_all(params->output_dma_channel);
 			asrc_output_dma_callback((void *)params);
 		}
+
+		spin_unlock_irqrestore(&pair_lock, lock_flags);
 	}
 
 	regcache_cache_only(asrc->regmap, true);

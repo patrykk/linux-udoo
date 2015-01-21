@@ -28,7 +28,7 @@
 #include "gc_hal_base.h"
 #include "gc_hal_profiler.h"
 #include "gc_hal_driver.h"
-#ifndef VIVANTE_NO_3D
+#if gcdENABLE_3D
 #include "gc_hal_statistics.h"
 #endif
 
@@ -200,6 +200,9 @@ gceCORE;
 #endif
 
 #define gcdMAX_SURF_LAYER              4
+
+#define gcdMAX_DRAW_BUFFERS            4
+
 /*******************************************************************************
 **
 **  gcmVERIFY_OBJECT
@@ -357,8 +360,9 @@ gckOS_AllocatePagedMemory(
 gceSTATUS
 gckOS_AllocatePagedMemoryEx(
     IN gckOS Os,
-    IN gctBOOL Contiguous,
+    IN gctUINT32 Flag,
     IN gctSIZE_T Bytes,
+    OUT gctUINT32 * Gid,
     OUT gctPHYS_ADDR * Physical
     );
 
@@ -389,10 +393,15 @@ gckOS_MapPagesEx(
     IN gceCORE Core,
     IN gctPHYS_ADDR Physical,
     IN gctSIZE_T PageCount,
-#if gcdPROCESS_ADDRESS_SPACE
     IN gctUINT32 Address,
-#endif
     IN gctPOINTER PageTable
+    );
+
+gceSTATUS
+gckOS_UnmapPages(
+    IN gckOS Os,
+    IN gctSIZE_T PageCount,
+    IN gctUINT32 Address
     );
 
 /* Unlock pages. */
@@ -497,6 +506,14 @@ gckOS_UnmapPhysical(
     IN gckOS Os,
     IN gctPOINTER Logical,
     IN gctSIZE_T Bytes
+    );
+
+/* Get real physical address from descriptor. */
+gceSTATUS
+gckOS_PhysicalToPhysicalAddress(
+    IN gckOS Os,
+    IN gctPOINTER Physical,
+    OUT gctUINT32 * PhysicalAddress
     );
 
 /* Read data from a hardware register. */
@@ -1329,6 +1346,13 @@ gckOS_GPUPhysicalToCPUPhysical(
     IN gctUINT32_PTR CPUPhysical
     );
 
+gceSTATUS
+gckOS_QueryOption(
+    IN gckOS Os,
+    IN gctCONST_STRING Option,
+    OUT gctUINT32 * Value
+    );
+
 /******************************************************************************\
 ** Debug Support
 */
@@ -1560,13 +1584,6 @@ gckOS_StopTimer(
     IN gctPOINTER Timer
     );
 
-/* Get the global video memory mutex. */
-gceSTATUS
-gckOS_GetVideoMemoryMutex(
-    IN gckOS Os,
-    OUT gctPOINTER *Mutex
-    );
-
 /******************************************************************************\
 ********************************* gckHEAP Object ********************************
 \******************************************************************************/
@@ -1664,9 +1681,10 @@ gckVIDMEM_Free(
 gceSTATUS
 gckVIDMEM_Lock(
     IN gckKERNEL Kernel,
-    IN gcuVIDMEM_NODE_PTR Node,
+    IN gckVIDMEM_NODE Node,
     IN gctBOOL Cacheable,
     OUT gctUINT32 * Address,
+    OUT gctUINT32 * Gid,
     OUT gctUINT64 * PhysicalAddress
     );
 
@@ -1674,7 +1692,7 @@ gckVIDMEM_Lock(
 gceSTATUS
 gckVIDMEM_Unlock(
     IN gckKERNEL Kernel,
-    IN gcuVIDMEM_NODE_PTR Node,
+    IN gckVIDMEM_NODE Node,
     IN gceSURF_TYPE Type,
     IN OUT gctBOOL * Asynchroneous
     );
@@ -1683,9 +1701,8 @@ gckVIDMEM_Unlock(
 gceSTATUS
 gckVIDMEM_ConstructVirtual(
     IN gckKERNEL Kernel,
-    IN gctBOOL Contiguous,
+    IN gctUINT32 Flag,
     IN gctSIZE_T Bytes,
-    IN gctBOOL Cacheable,
     OUT gcuVIDMEM_NODE_PTR * Node
     );
 
@@ -2236,6 +2253,12 @@ gckHARDWARE_SetPowerManagement(
     );
 
 gceSTATUS
+gckHARDWARE_SetPowerManagementLock(
+    IN gckHARDWARE Hardware,
+    IN gctBOOL Lock
+    );
+
+gceSTATUS
 gckHARDWARE_SetGpuProfiler(
     IN gckHARDWARE Hardware,
     IN gctBOOL GpuProfiler
@@ -2348,6 +2371,21 @@ gceSTATUS
 gckHARDWARE_SetDVFSPeroid(
     IN gckHARDWARE Hardware,
     IN gctUINT32 Frequency
+    );
+
+gceSTATUS
+gckHARDWARE_PrepareFunctions(
+    gckHARDWARE Hardware
+    );
+
+gceSTATUS
+gckHARDWARE_SetMMUStates(
+    IN gckHARDWARE Hardware,
+    IN gctPOINTER MtlbAddress,
+    IN gceMMU_MODE Mode,
+    IN gctPOINTER SafeAddress,
+    IN gctPOINTER Logical,
+    IN OUT gctUINT32 * Bytes
     );
 
 #if !gcdENABLE_VG
@@ -2705,14 +2743,6 @@ gckMMU_Construct(
 gceSTATUS
 gckMMU_Destroy(
     IN gckMMU Mmu
-    );
-
-/* Enable the MMU. */
-gceSTATUS
-gckMMU_Enable(
-    IN gckMMU Mmu,
-    IN gctUINT32 PhysBaseAddr,
-    IN gctUINT32 PhysSize
     );
 
 /* Allocate pages inside the MMU. */
