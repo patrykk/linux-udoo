@@ -75,6 +75,7 @@ typedef struct _gcsWL_EGL_DISPLAY
    struct wl_viv* wl_viv;
    struct wl_registry *registry;
    struct wl_event_queue    *wl_queue;
+   gctINT swapInterval;
 } gcsWL_EGL_DISPLAY;
 
 typedef struct _gcsWL_EGL_BUFFER_INFO
@@ -87,6 +88,7 @@ typedef struct _gcsWL_EGL_BUFFER_INFO
    gcePOOL pool;
    gctUINT bytes;
    gcoSURF surface;
+   gcoSURF attached_surface;
    gctINT32 invalidate;
    gctBOOL locked;
 } gcsWL_EGL_BUFFER_INFO;
@@ -292,6 +294,12 @@ gcoOS_SetSwapInterval(
     IN HALNativeDisplayType Display,
     IN gctINT Interval
 );
+
+gceSTATUS
+gcoOS_SetSwapIntervalEx(
+    IN HALNativeDisplayType Display,
+    IN gctINT Interval,
+    IN gctPOINTER localDisplay);
 
 gceSTATUS
 gcoOS_GetSwapInterval(

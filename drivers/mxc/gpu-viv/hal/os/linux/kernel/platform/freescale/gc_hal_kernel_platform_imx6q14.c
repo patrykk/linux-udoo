@@ -61,6 +61,9 @@ extern int unregister_thermal_notifier(struct notifier_block *nb);
 #define UNREG_THERMAL_NOTIFIER(a) unregister_thermal_notifier(a);
 #endif
 
+static int initgpu3DMinClock = 1;
+module_param(initgpu3DMinClock, int, 0644);
+
 struct platform_device *pdevice;
 
 #ifdef CONFIG_GPU_LOW_MEMORY_KILLER
@@ -113,7 +116,7 @@ static int force_contiguous_lowmem_shrink(IN gckKERNEL Kernel)
 		return 0;
 	selected_oom_adj = min_adj;
 
-	read_lock(&tasklist_lock);
+       rcu_read_lock();
 	for_each_process(p) {
 		struct mm_struct *mm;
 		struct signal_struct *sig;
@@ -135,7 +138,7 @@ static int force_contiguous_lowmem_shrink(IN gckKERNEL Kernel)
 
 		tasksize = 0;
 		task_unlock(p);
-		read_unlock(&tasklist_lock);
+               rcu_read_unlock();
 
 		if (gckKERNEL_QueryProcessDB(Kernel, p->pid, gcvFALSE, gcvDB_VIDEO_MEMORY, &info) == gcvSTATUS_OK){
 			tasksize += info.counters.bytes / PAGE_SIZE;
@@ -144,7 +147,7 @@ static int force_contiguous_lowmem_shrink(IN gckKERNEL Kernel)
 			tasksize += info.counters.bytes / PAGE_SIZE;
 		}
 
-                read_lock(&tasklist_lock);
+               rcu_read_lock();
 
 		if (tasksize <= 0)
 			continue;
@@ -171,7 +174,7 @@ static int force_contiguous_lowmem_shrink(IN gckKERNEL Kernel)
 		force_sig(SIGKILL, selected);
 		ret = 0;
 	}
-	read_unlock(&tasklist_lock);
+       rcu_read_unlock();
 	return ret;
 }
 
@@ -193,12 +196,7 @@ _ShrinkMemory(
 
     if (kernel != gcvNULL)
     {
-        /* Acquire the mutex. */
-        gcmkVERIFY_OK(gckOS_AcquireMutex(kernel->os, kernel->vidmemMutex, gcvINFINITE));
-
         force_contiguous_lowmem_shrink(kernel);
-
-        gcmkVERIFY_OK(gckOS_ReleaseMutex(kernel->os, kernel->vidmemMutex));
     }
     else
     {
@@ -253,7 +251,47 @@ static int thermal_hot_pm_notify(struct notifier_block *nb, unsigned long event,
 static struct notifier_block thermal_hot_pm_notifier = {
     .notifier_call = thermal_hot_pm_notify,
     };
+
+static ssize_t show_gpu3DMinClock(struct device_driver *dev, char *buf)
+{
+    gctUINT currentf,minf,maxf;
+    gckGALDEVICE galDevice;
+
+    galDevice = platform_get_drvdata(pdevice);
+    if(galDevice->kernels[gcvCORE_MAJOR])
+    {
+         gckHARDWARE_GetFscaleValue(galDevice->kernels[gcvCORE_MAJOR]->hardware,
+            &currentf, &minf, &maxf);
+    }
+    snprintf(buf, PAGE_SIZE, "%d\n", minf);
+    return strlen(buf);
+}
+
+static ssize_t update_gpu3DMinClock(struct device_driver *dev, const char *buf, size_t count)
+{
+
+    gctINT fields;
+    gctUINT MinFscaleValue;
+    gckGALDEVICE galDevice;
+
+    galDevice = platform_get_drvdata(pdevice);
+    if(galDevice->kernels[gcvCORE_MAJOR])
+    {
+         fields = sscanf(buf, "%d", &MinFscaleValue);
+         if (fields < 1)
+             return -EINVAL;
+
+         gckHARDWARE_SetMinFscaleValue(galDevice->kernels[gcvCORE_MAJOR]->hardware,MinFscaleValue);
+    }
+
+    return count;
+}
+
+static DRIVER_ATTR(gpu3DMinClock, S_IRUGO | S_IWUSR, show_gpu3DMinClock, update_gpu3DMinClock);
 #endif
+
+
+
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
 static const struct of_device_id mxs_gpu_dt_ids[] = {
@@ -282,9 +320,11 @@ struct imx_priv {
     struct clk         *clk_2d_axi;
     struct clk         *clk_vg_axi;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0) || LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
     /*Power management.*/
     struct regulator      *gpu_regulator;
+#endif
 #endif
        /*Run time pm*/
        struct device           *pmdev;
@@ -305,9 +345,6 @@ gckPLATFORM_AdjustParam(
      struct resource* res;
      struct platform_device* pdev = Platform->device;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
-     struct imx_priv *priv = Platform->priv;
-
-       struct contiguous_mem_pool *pool;
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
        struct device_node *dn =pdev->dev.of_node;
        const u32 *prop;
@@ -353,34 +390,7 @@ gckPLATFORM_AdjustParam(
     }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
-       pool = devm_kzalloc(&pdev->dev, sizeof(*pool), GFP_KERNEL);
-       if (!pool)
-               return gcvSTATUS_OUT_OF_MEMORY;
-       if(Args->contiguousSize)
-       {
-            if(Args->contiguousSize == 4 << 20)
-                /*Update the default setting*/
-               Args->contiguousSize = pool->size = 128 * 1024 * 1024;
-            else
-               pool->size = Args->contiguousSize;
-
-           init_dma_attrs(&pool->attrs);
-           dma_set_attr(DMA_ATTR_WRITE_COMBINE, &pool->attrs);
-           pool->virt = dma_alloc_attrs(&pdev->dev, pool->size, &pool->phys,
-                                        GFP_KERNEL, &pool->attrs);
-           if (!pool->virt) {
-                   dev_err(&pdev->dev, "Failed to allocate contiguous memory\n");
-
-                   devm_kfree(&pdev->dev, pool);
-
-                   return gcvSTATUS_OUT_OF_MEMORY;
-           }
-           Args->contiguousBase = pool->phys;
-       }
-       Args->contiguousRequested = gcvTRUE;
-
-       priv->pool = pool;
-
+       Args->contiguousBase = 0;
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
        prop = of_get_property(dn, "contiguousbase", NULL);
        if(prop)
@@ -396,6 +406,7 @@ gckPLATFORM_AdjustParam(
     if (Args->contiguousSize == 0)
        gckOS_Print("Warning: No contiguous memory is reserverd for gpu.!\n ");
 
+    Args->gpu3DMinClock = initgpu3DMinClock;
 
     return gcvSTATUS_OK;
 }
@@ -419,24 +430,6 @@ _FreePriv(
     IN gckPLATFORM Platform
     )
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
-    struct imx_priv *priv = Platform->priv;
-    struct platform_device *pdev = Platform->device;
-
-   struct contiguous_mem_pool *pool = priv->pool;
-#endif
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
-    if (pool && pool->size)
-    {
-        dma_free_attrs(&pdev->dev, pool->size, pool->virt, pool->phys,
-                   &pool->attrs);
-
-        devm_kfree(&pdev->dev, pool);
-        priv->pool = NULL;
-    }
-#endif
-
 #ifdef CONFIG_GPU_LOW_MEMORY_KILLER
     task_free_unregister(&task_nb);
 #endif
@@ -471,6 +464,7 @@ _GetPower(
     priv->rstc[gcvCORE_VG] = IS_ERR(rstc) ? NULL : rstc;
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
     /*get gpu regulator*/
     priv->gpu_regulator = regulator_get(pdev, "cpu_vddgpu");
@@ -484,6 +478,7 @@ _GetPower(
                __FUNCTION__, __LINE__);
        return gcvSTATUS_NOT_FOUND;
     }
+#endif
 #endif
 
     /*Initialize the clock structure*/
@@ -536,6 +531,12 @@ _GetPower(
 #if gcdENABLE_FSCALE_VAL_ADJUST
     pdevice = Platform->device;
     REG_THERMAL_NOTIFIER(&thermal_hot_pm_notifier);
+    {
+        int ret = 0;
+        ret = driver_create_file(pdevice->dev.driver, &driver_attr_gpu3DMinClock);
+        if(ret)
+            dev_err(&pdevice->dev, "create gpu3DMinClock attr failed (%d)\n", ret);
+    }
 #endif
 
     return gcvSTATUS_OK;
@@ -590,6 +591,8 @@ _PutPower(
 
 #if gcdENABLE_FSCALE_VAL_ADJUST
     UNREG_THERMAL_NOTIFIER(&thermal_hot_pm_notifier);
+
+    driver_remove_file(pdevice->dev.driver, &driver_attr_gpu3DMinClock);
 #endif
 
     return gcvSTATUS_OK;
@@ -603,10 +606,15 @@ _SetPower(
     )
 {
     struct imx_priv* priv = Platform->priv;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0) || LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
     int ret;
+#endif
+#endif
 
     if (Enable)
     {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0) || LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
         if(!IS_ERR(priv->gpu_regulator)) {
             ret = regulator_enable(priv->gpu_regulator);
@@ -616,6 +624,7 @@ _SetPower(
         }
 #else
         imx_gpc_power_up_pu(true);
+#endif
 #endif
 
 #ifdef CONFIG_PM
@@ -628,11 +637,13 @@ _SetPower(
         pm_runtime_put_sync(priv->pmdev);
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0) || LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
         if(!IS_ERR(priv->gpu_regulator))
             regulator_disable(priv->gpu_regulator);
 #else
         imx_gpc_power_up_pu(false);
+#endif
 #endif
 
     }

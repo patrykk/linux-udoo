@@ -210,10 +210,12 @@ typedef struct _gcsDATABASE
     gcsDATABASE_COUNTERS                contiguous;
     gcsDATABASE_COUNTERS                mapUserMemory;
     gcsDATABASE_COUNTERS                mapMemory;
+    gcsDATABASE_COUNTERS                virtualCommandBuffer;
 
     gcsDATABASE_COUNTERS                vidMemType[gcvSURF_NUM_TYPES];
     /* Counter for each video memory pool. */
     gcsDATABASE_COUNTERS                vidMemPool[gcvPOOL_NUMBER_OF_POOLS];
+    gctPOINTER                          counterMutex;
 
     /* Idle time management. */
     gctUINT64                           lastIdle;
@@ -235,6 +237,15 @@ typedef struct _gcsDATABASE
 #endif
 }
 gcsDATABASE;
+
+typedef struct _gcsRECORDER * gckRECORDER;
+
+typedef struct _gcsFDPRIVATE *          gcsFDPRIVATE_PTR;
+typedef struct _gcsFDPRIVATE
+{
+    gctINT                              (* release) (gcsFDPRIVATE_PTR Private);
+}
+gcsFDPRIVATE;
 
 /* Create a process database that will contain all its allocations. */
 gceSTATUS
@@ -515,8 +526,6 @@ struct _gckKERNEL
     gckDB                       db;
     gctBOOL                     dbCreated;
 
-    gctPOINTER                  resetFlagClearTimer;
-    gctPOINTER                  resetAtom;
     gctUINT64                   resetTimeStamp;
 
     /* Pointer to gckEVENT object. */
@@ -553,7 +562,18 @@ struct _gckKERNEL
     gctUINT32                   securityChannel;
 #endif
 
-    gctPOINTER                  vidmemMutex;
+    /* Timer to monitor GPU stuck. */
+    gctPOINTER                  monitorTimer;
+
+    /* Flag to quit monitor timer. */
+    gctBOOL                     monitorTimerStop;
+
+    /* Monitor states. */
+    gctBOOL                     monitoring;
+    gctUINT32                   lastCommitStamp;
+    gctUINT32                   timer;
+    gctUINT32                   restoreAddress;
+    gctUINT32                   restoreMask;
 };
 
 struct _FrequencyHistory
@@ -745,7 +765,7 @@ struct _gckEVENT
 
     /* Time stamp. */
     gctUINT64                   stamp;
-    gctUINT64                   lastCommitStamp;
+    gctUINT32                   lastCommitStamp;
 
     /* Queue mutex. */
     gctPOINTER                  eventQueueMutex;
@@ -791,6 +811,10 @@ struct _gckEVENT
 
 #if gcdINTERRUPT_STATISTIC
     gctPOINTER                  interruptCount;
+#endif
+
+#if gcdRECORD_COMMAND
+    gckRECORDER                 recorder;
 #endif
 };
 
@@ -884,8 +908,6 @@ typedef union _gcuVIDMEM_NODE
         /* Information for this node. */
         /* Contiguously allocated? */
         gctBOOL                 contiguous;
-        /* cacheable vidmem ? */
-        gctBOOL                 cacheable;
         /* mdl record pointer... a kmalloc address. Process agnostic. */
         gctPHYS_ADDR            physical;
         gctSIZE_T               bytes;
@@ -899,6 +921,9 @@ typedef union _gcuVIDMEM_NODE
         /* Kernel logical of this node. */
         gctPOINTER              kernelVirtual;
 #endif
+
+        /* Customer private handle */
+        gctUINT32               gid;
 
         /* Page table information. */
         /* Used only when node is not contiguous */
@@ -946,13 +971,18 @@ struct _gckVIDMEM
 
     /* Allocation threshold. */
     gctSIZE_T                   threshold;
+
+    /* The heap mutex. */
+    gctPOINTER                  mutex;
 };
 
-typedef struct _gcsVIDMEM_NODE * gckVIDMEM_NODE;
 typedef struct _gcsVIDMEM_NODE
 {
     /* Pointer to gcuVIDMEM_NODE. */
     gcuVIDMEM_NODE_PTR          node;
+
+    /* Mutex to protect node. */
+    gctPOINTER                  mutex;
 
     /* Reference count. */
     gctPOINTER                  reference;
@@ -1081,6 +1111,13 @@ gckVIDMEM_HANDLE_Lookup(
     OUT gckVIDMEM_NODE * Node
     );
 
+gceSTATUS
+gckVIDMEM_NODE_GetFd(
+    IN gckKERNEL Kernel,
+    IN gctUINT32 Handle,
+    OUT gctINT * Fd
+    );
+
 #if gcdPROCESS_ADDRESS_SPACE
 gceSTATUS
 gckEVENT_DestroyMmu(
@@ -1165,6 +1202,13 @@ gckOS_DestroyUserVirtualMapping(
     IN gctPHYS_ADDR Physical,
     IN gctSIZE_T Bytes,
     IN gctPOINTER Logical
+    );
+
+gceSTATUS
+gckOS_GetFd(
+    IN gctSTRING Name,
+    IN gcsFDPRIVATE_PTR Private,
+    OUT gctINT *Fd
     );
 
 gceSTATUS
@@ -1393,6 +1437,49 @@ gceSTATUS
 gckENTRYQUEUE_Dequeue(
     IN gckENTRYQUEUE Queue,
     OUT gckENTRYDATA * Data
+    );
+
+/******************************************************************************\
+****************************** gckRECORDER Object ******************************
+\******************************************************************************/
+gceSTATUS
+gckRECORDER_Construct(
+    IN gckOS Os,
+    IN gckHARDWARE Hardware,
+    OUT gckRECORDER * Recorder
+    );
+
+gceSTATUS
+gckRECORDER_Destory(
+    IN gckOS Os,
+    IN gckRECORDER Recorder
+    );
+
+void
+gckRECORDER_AdvanceIndex(
+    gckRECORDER Recorder,
+    gctUINT64   CommitStamp
+    );
+
+void
+gckRECORDER_Record(
+    gckRECORDER Recorder,
+    gctUINT8_PTR CommandBuffer,
+    gctUINT32 CommandBytes,
+    gctUINT8_PTR ContextBuffer,
+    gctUINT32 ContextBytes
+    );
+
+void
+gckRECORDER_Dump(
+    gckRECORDER Recorder
+    );
+
+gceSTATUS
+gckRECORDER_UpdateMirror(
+    gckRECORDER Recorder,
+    gctUINT32 State,
+    gctUINT32 Data
     );
 
 #ifdef __cplusplus
