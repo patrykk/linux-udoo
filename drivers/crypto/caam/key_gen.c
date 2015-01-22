@@ -1,7 +1,7 @@
 /*
  * CAAM/SEC 4.x functions for handling key-generation jobs
  *
- * Copyright 2008-2011 Freescale Semiconductor, Inc.
+ * Copyright (C) 2008-2013 Freescale Semiconductor, Inc.
  *
  */
 #include "compat.h"
@@ -19,8 +19,11 @@ void split_key_done(struct device *dev, u32 *desc, u32 err,
 	dev_err(dev, "%s %d: err 0x%x\n", __func__, __LINE__, err);
 #endif
 
-	if (err)
-		caam_jr_strstatus(dev, err);
+	if (err) {
+		char tmp[CAAM_ERROR_STR_MAX];
+
+		dev_err(dev, "%08x: %s\n", err, caam_jr_strstatus(tmp, err));
+	}
 
 	res->err = err;
 
@@ -48,29 +51,24 @@ int gen_split_key(struct device *jrdev, u8 *key_out, int split_key_len,
 	u32 *desc;
 	struct split_key_result result;
 	dma_addr_t dma_addr_in, dma_addr_out;
-	int ret = -ENOMEM;
+	int ret = 0;
 
 	desc = kmalloc(CAAM_CMD_SZ * 6 + CAAM_PTR_SZ * 2, GFP_KERNEL | GFP_DMA);
 	if (!desc) {
 		dev_err(jrdev, "unable to allocate key input memory\n");
-		return ret;
+		return -ENOMEM;
 	}
+
+	init_job_desc(desc, 0);
 
 	dma_addr_in = dma_map_single(jrdev, (void *)key_in, keylen,
 				     DMA_TO_DEVICE);
 	if (dma_mapping_error(jrdev, dma_addr_in)) {
 		dev_err(jrdev, "unable to map key input memory\n");
-		goto out_free;
+		kfree(desc);
+		return -ENOMEM;
 	}
-
-	dma_addr_out = dma_map_single(jrdev, key_out, split_key_pad_len,
-				      DMA_FROM_DEVICE);
-	if (dma_mapping_error(jrdev, dma_addr_out)) {
-		dev_err(jrdev, "unable to map key output memory\n");
-		goto out_unmap_in;
-	}
-
-	init_job_desc(desc, 0);
+	dma_sync_single_for_device(jrdev, dma_addr_in, keylen, DMA_TO_DEVICE);
 	append_key(desc, dma_addr_in, keylen, CLASS_2 | KEY_DEST_CLASS_REG);
 
 	/* Sets MDHA up into an HMAC-INIT */
@@ -87,6 +85,13 @@ int gen_split_key(struct device *jrdev, u8 *key_out, int split_key_len,
 	 * FIFO_STORE with the explicit split-key content store
 	 * (0x26 output type)
 	 */
+	dma_addr_out = dma_map_single(jrdev, key_out, split_key_pad_len,
+				      DMA_FROM_DEVICE);
+	if (dma_mapping_error(jrdev, dma_addr_out)) {
+		dev_err(jrdev, "unable to map key output memory\n");
+		kfree(desc);
+		return -ENOMEM;
+	}
 	append_fifo_store(desc, dma_addr_out, split_key_len,
 			  LDST_CLASS_2_CCB | FIFOST_TYPE_SPLIT_KEK);
 
@@ -111,13 +116,14 @@ int gen_split_key(struct device *jrdev, u8 *key_out, int split_key_len,
 			       split_key_pad_len, 1);
 #endif
 	}
-
+	dma_sync_single_for_cpu(jrdev, dma_addr_out, split_key_pad_len,
+				DMA_FROM_DEVICE);
 	dma_unmap_single(jrdev, dma_addr_out, split_key_pad_len,
 			 DMA_FROM_DEVICE);
-out_unmap_in:
 	dma_unmap_single(jrdev, dma_addr_in, keylen, DMA_TO_DEVICE);
-out_free:
+
 	kfree(desc);
+
 	return ret;
 }
 EXPORT_SYMBOL(gen_split_key);
