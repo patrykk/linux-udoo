@@ -307,7 +307,7 @@ static ssize_t mxc_hdmi_store_rgb_out_enable(struct device *dev,
 	unsigned long value;
 	int ret;
 
-	ret = strict_strtoul(buf, 10, &value);
+	ret = kstrtoul(buf, 10, &value);
 	if (ret)
 		return ret;
 
@@ -346,7 +346,7 @@ static ssize_t mxc_hdmi_store_hdcp_enable(struct device *dev,
 	unsigned long value;
 	int ret;
 
-	ret = strict_strtoul(buf, 10, &value);
+	ret = kstrtoul(buf, 10, &value);
 	if (ret)
 		return ret;
 
