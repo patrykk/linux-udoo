@@ -410,7 +410,7 @@ static int __init vdoa_iram_size_setup(char *options)
 {
 	int ret;
 
-	ret = strict_strtoul(options, 0, &iram_size);
+	ret = kstrtoul(options, 0, &iram_size);
 	if (ret)
 		iram_size = 0;
 	else
