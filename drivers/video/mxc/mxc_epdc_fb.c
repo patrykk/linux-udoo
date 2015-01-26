@@ -4605,9 +4605,9 @@ int mxc_epdc_fb_probe(struct platform_device *pdev)
 		goto out_cmap;
 	}
 
-	epdc_base = devm_request_and_ioremap(&pdev->dev, res);
-	if (epdc_base == NULL) {
-		ret = -ENOMEM;
+	epdc_base = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(epdc_base)) {
+		ret = PTR_ERR(epdc_base);
 		goto out_cmap;
 	}
 
@@ -4617,8 +4617,8 @@ int mxc_epdc_fb_probe(struct platform_device *pdev)
 						  &fb_data->phys_start,
 						  GFP_DMA | GFP_KERNEL);
 
-	if (info->screen_base == NULL) {
-		ret = -ENOMEM;
+	if (IS_ERR(info->screen_base)) {
+		ret = PTR_ERR(info->screen_base);
 		goto out_cmap;
 	}
 	dev_dbg(&pdev->dev, "allocated at %p:0x%x\n", info->screen_base,
