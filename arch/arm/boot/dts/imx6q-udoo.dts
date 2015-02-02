@@ -61,6 +61,30 @@
                         regulator-max-microvolt = <5000000>;
                         enable-active-high;
                 }
+
+                reg_audio: regulator@3 {
+                        compatible = "regulator-fixed";
+                        reg = <3>;
+                        regulator-name = "8962-SUPPLY";
+                        gpio = <&gpio4 10 0>;
+                        enable-active-high;
+                };
+
+                reg_sensor: regulator@4 {
+                        compatible = "regulator-fixed";
+                        reg = <4>;
+                        regulator-name = "sensor-SUPPLY";
+                        enable-active-high;
+                };
+
+                reg_2p5v: regulator@5 {
+                        compatible = "regulator-fixed";
+                        reg = <5>;
+                        regulator-name = "2P5V";
+                        regulator-min-microvolt = <2500000>;
+                        regulator-max-microvolt = <2500000>;
+                        regulator-always-on;
+                };
 	};
 
 	mxcfb1: fb@0 {
