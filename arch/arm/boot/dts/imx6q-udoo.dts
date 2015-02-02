@@ -356,3 +356,12 @@
 //	#pwm-cells = <3>;
 	status = "okay";
 };
+
+&mipi_csi {
+        status = "okay";
+        ipu_id = <0>;
+        csi_id = <1>;
+        v_channel = <0>;
+        lanes = <1>;
+};
+
