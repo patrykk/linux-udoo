@@ -52,6 +52,15 @@
 			regulator-always-on;
                         enable-active-low;
                 };
+
+                reg_usb_otg_vbus: regulator@2 {
+                        compatible = "regulator-fixed";
+                        reg = <2>;
+                        regulator-name = "usb_otg_vbus";
+                        regulator-min-microvolt = <5000000>;
+                        regulator-max-microvolt = <5000000>;
+                        enable-active-high;
+                }
 	};
 
 	mxcfb1: fb@0 {
@@ -321,6 +330,8 @@
 };
 
 &usbotg {
+        pinctrl-names = "default";
+        vbus-supply = <&reg_usb_otg_vbus>;
 	status = "okay";
 };
 
