@@ -82,13 +82,17 @@
 	status = "okay";
 };
 
+&hdmi_cec {
+        pinctrl-names = "default";
+        pinctrl-0 = <&pinctrl_hdmi_cec>;
+        status = "okay";
+};
 
 &hdmi_core {
 	ipu_id = <0>;
 	disp_id = <0>;
 	status = "okay";
 };
-
 
 &hdmi_video {
 	fsl,phy_reg_vlev = <0x0294>;
@@ -268,6 +272,12 @@
                                 MX6QDL_PAD_DI0_PIN3__AUD6_TXFS  0x80000000
                                 MX6QDL_PAD_DI0_PIN4__AUD6_RXD   0x80000000
                                 MX6QDL_PAD_DI0_PIN15__AUD6_TXC  0x80000000
+                        >;
+                };
+
+                pinctrl_hdmi_cec: hdmicecgrp {
+                        fsl,pins = <
+                                MX6QDL_PAD_EIM_A25__HDMI_TX_CEC_LINE 0x1f8b0
                         >;
                 };
 	};
