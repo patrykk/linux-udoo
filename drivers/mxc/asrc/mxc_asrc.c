@@ -1908,7 +1908,7 @@ static int mxc_asrc_probe(struct platform_device *pdev)
 		return PTR_ERR(asrc->ipg_clk);
 	}
 
-	asrc->asrck_clk = devm_clk_get(&pdev->dev, "asrck");
+	asrc->asrck_clk = devm_clk_get(&pdev->dev, "asrck_0");
 	if (IS_ERR(asrc->asrck_clk)) {
 		dev_err(&pdev->dev, "failed to get asrck clock\n");
 		return PTR_ERR(asrc->asrck_clk);
