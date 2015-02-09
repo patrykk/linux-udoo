@@ -7,6 +7,7 @@
 
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
+#include <linux/types.h>
 
 #include "compat.h"
 #include "regs.h"
@@ -544,7 +545,7 @@ static int caam_probe(struct platform_device *pdev)
 	setbits32(&topregs->ctrl.mcr, MCFGR_WDENABLE |
 		  (sizeof(dma_addr_t) == sizeof(u64) ? MCFGR_LONG_PTR : 0));
 
-#ifdef CONFIG_ARCH_MX6
+#ifdef CONFIG_SOC_IMX6 
 	/*
 	 * ERRATA:  mx6 devices have an issue wherein AXI bus transactions
 	 * may not occur in the correct order. This isn't a problem running
