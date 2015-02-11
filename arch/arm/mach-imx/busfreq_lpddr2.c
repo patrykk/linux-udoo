@@ -173,7 +173,7 @@ int init_mmdc_lpddr2_settings(struct platform_device *busfreq_pdev)
 	 */
 	ddr_freq_change_iram_base = __arm_ioremap(iram_paddr,
 						LPDDR2_FREQ_CHANGE_SIZE,
-						MT_MEMORY_NONCACHED);
+						MT_MEMORY_RWX_NONCACHED);
 	mx6_change_lpddr2_freq = (void *)fncpy(ddr_freq_change_iram_base,
 		&mx6_lpddr2_freq_change, LPDDR2_FREQ_CHANGE_SIZE);
 

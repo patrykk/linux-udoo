@@ -39,6 +39,7 @@
 #include <linux/proc_fs.h>
 #include <linux/sched.h>
 #include <linux/smp.h>
+#include <linux/slab.h>
 
 #include "hardware.h"
 
@@ -466,7 +467,7 @@ int init_mmdc_ddr3_settings(struct platform_device *busfreq_pdev)
 	 */
 	ddr_freq_change_iram_base = __arm_ioremap(iram_paddr,
 						DDR_FREQ_CHANGE_SIZE,
-						MT_MEMORY_NONCACHED);
+						MT_MEMORY_RWX_NONCACHED);
 	mx6_change_ddr_freq = (void *)fncpy(ddr_freq_change_iram_base,
 		&mx6_ddr3_freq_change, DDR_FREQ_CHANGE_SIZE);
 
