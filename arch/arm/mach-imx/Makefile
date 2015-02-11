@@ -98,6 +98,15 @@ obj-$(CONFIG_SOC_IMX6Q) += clk-imx6q.o mach-imx6q.o
 obj-$(CONFIG_SOC_IMX6SL) += clk-imx6sl.o mach-imx6sl.o
 obj-$(CONFIG_SOC_IMX6SX) += clk-imx6sx.o mach-imx6sx.o
 
+obj-y += busfreq-imx6.o
+ifeq ($(CONFIG_ARM_IMX6Q_CPUFREQ),y)
+obj-$(CONFIG_SOC_IMX6Q) += ddr3_freq_imx6.o busfreq_ddr3.o
+obj-$(CONFIG_SOC_IMX6SL) += lpddr2_freq_imx6.o busfreq_lpddr2.o
+endif
+ifeq ($(CONFIG_CPU_IDLE), y)
+obj-$(CONFIG_SOC_IMX6SL) += imx6sl_wfi.o
+endif
+
 ifeq ($(CONFIG_SUSPEND),y)
 AFLAGS_suspend-imx6.o :=-Wa,-march=armv7-a
 obj-$(CONFIG_SOC_IMX6) += suspend-imx6.o
