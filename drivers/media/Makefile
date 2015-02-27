@@ -1,42 +1,33 @@
 #
-# Makefile for the V4L2 core
+# Makefile for the kernel multimedia device drivers.
 #
 
-tuner-objs	:=	tuner-core.o
+media-objs	:= media-device.o media-devnode.o media-entity.o
 
-videodev-objs	:=	v4l2-dev.o v4l2-ioctl.o v4l2-device.o v4l2-fh.o \
-			v4l2-event.o v4l2-ctrls.o v4l2-subdev.o v4l2-clk.o \
-			v4l2-async.o
-ifeq ($(CONFIG_COMPAT),y)
-  videodev-objs += v4l2-compat-ioctl32.o
+#
+# I2C drivers should come before other drivers, otherwise they'll fail
+# when compiled as builtin drivers
+#
+obj-y += i2c/ tuners/
+obj-$(CONFIG_DVB_CORE)  += dvb-frontends/
+
+#
+# Now, let's link-in the media core
+#
+ifeq ($(CONFIG_MEDIA_CONTROLLER),y)
+  obj-$(CONFIG_MEDIA_SUPPORT) += media.o
 endif
-ifeq ($(CONFIG_OF),y)
-  videodev-objs += v4l2-of.o
-endif
 
-obj-$(CONFIG_VIDEO_V4L2) += videodev.o
-obj-$(CONFIG_VIDEO_V4L2_INT_DEVICE) += v4l2-int-device.o
-obj-$(CONFIG_VIDEO_V4L2) += v4l2-common.o
-obj-$(CONFIG_VIDEO_V4L2) += v4l2-dv-timings.o
+obj-$(CONFIG_VIDEO_DEV) += v4l2-core/
+obj-$(CONFIG_DVB_CORE)  += dvb-core/
 
-obj-$(CONFIG_VIDEO_TUNER) += tuner.o
+# There are both core and drivers at RC subtree - merge before drivers
+obj-y += rc/
 
-obj-$(CONFIG_V4L2_MEM2MEM_DEV) += v4l2-mem2mem.o
+#
+# Finally, merge the drivers that require the core
+#
 
-obj-$(CONFIG_VIDEOBUF_GEN) += videobuf-core.o
-obj-$(CONFIG_VIDEOBUF_DMA_SG) += videobuf-dma-sg.o
-obj-$(CONFIG_VIDEOBUF_DMA_CONTIG) += videobuf-dma-contig.o
-obj-$(CONFIG_VIDEOBUF_VMALLOC) += videobuf-vmalloc.o
-obj-$(CONFIG_VIDEOBUF_DVB) += videobuf-dvb.o
-
-obj-$(CONFIG_VIDEOBUF2_CORE) += videobuf2-core.o
-obj-$(CONFIG_VIDEOBUF2_MEMOPS) += videobuf2-memops.o
-obj-$(CONFIG_VIDEOBUF2_VMALLOC) += videobuf2-vmalloc.o
-obj-$(CONFIG_VIDEOBUF2_DMA_CONTIG) += videobuf2-dma-contig.o
-obj-$(CONFIG_VIDEOBUF2_DMA_SG) += videobuf2-dma-sg.o
-obj-$(CONFIG_VIDEOBUF2_DVB) += videobuf2-dvb.o
-
-ccflags-y += -I$(srctree)/drivers/media/dvb-core
-ccflags-y += -I$(srctree)/drivers/media/dvb-frontends
-ccflags-y += -I$(srctree)/drivers/media/tuners
+obj-y += common/ platform/ pci/ usb/ mmc/ firewire/ parport/
+obj-$(CONFIG_VIDEO_DEV) += radio/
 
