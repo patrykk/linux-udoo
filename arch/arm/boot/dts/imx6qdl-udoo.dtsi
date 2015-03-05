@@ -241,6 +241,13 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_enet>;
 	phy-mode = "rgmii";
+	phy-poweron = <&gpio2 31 0>;
+	phy-reset-gpio = <&gpio3 23 0>;
+	phy-clk125-en = <&gpio6 24 1>;
+	phy-mode0 = <&gpio6 29 1>;
+	phy-mode1 = <&gpio6 28 1>;
+	phy-mode2 = <&gpio6 27 1>;
+	phy-mode3 = <&gpio6 25 1>;
 	status = "okay";
 };
 
