@@ -1295,7 +1295,6 @@ const struct seq_operations cpuinfo_op = {
 
 /* export the cache management functions */
 #ifndef MULTI_CACHE
-#include "../mm/dma.h"
 
 EXPORT_SYMBOL(__glue(_CACHE,_dma_map_area));
 EXPORT_SYMBOL(__glue(_CACHE,_dma_unmap_area));
