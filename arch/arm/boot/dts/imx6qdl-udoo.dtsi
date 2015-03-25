@@ -113,7 +113,7 @@
 	};
 
 	codec: vt1613 {
-                compatible = "wlf,vt1613";
+                compatible = "fsl,vt1613";
                 amic-mono;
         };
 
@@ -134,6 +134,8 @@
                         "DMICDAT", "DMIC";
                 mux-int-port = <1>;
                 mux-ext-port = <6>;
+		hp-det-gpios = <&gpio7 8 1>;
+		mic-det-gpios = <&gpio1 9 1>;
         };
 
 	sound-hdmi {
@@ -177,7 +179,7 @@
 
 &audmux {
         pinctrl-names = "default";
-        pinctrl-0 = <&pinctrl_audmux>;
+//        pinctrl-0 = <&pinctrl_audmux>;
         status = "okay";
 };
 
@@ -260,7 +262,7 @@
 				MX6QDL_PAD_NANDF_D4__GPIO2_IO04   0x80000000  /* 5v enable      */
 				MX6QDL_PAD_NANDF_CS0__GPIO6_IO11  0x80000000  /* Vtt suspend    */
 				MX6QDL_PAD_SD2_DAT0__GPIO1_IO15   0x80000000  /* touch reset    */
-				MX6QDL_PAD_EIM_EB2__GPIO2_IO30    0x80000000  /* audio reset    */
+//				MX6QDL_PAD_EIM_EB2__GPIO2_IO30    0x80000000  /* audio reset    */
 				MX6QDL_PAD_EIM_EB3__GPIO2_IO31    0x80000000  /* ethernet power */
 
 				MX6QDL_PAD_GPIO_17__GPIO7_IO12    0x80000000  /* usb hub reset  */
@@ -282,6 +284,80 @@
 				MX6QDL_PAD_CSI0_DAT17__GPIO6_IO03 0x80000000  /* input mon serial*/
 				MX6QDL_PAD_EIM_A19__GPIO2_IO19    0x80000000  /* writeprotect spi*/
 				MX6QDL_PAD_GPIO_3__GPIO1_IO03     0x30b1      /* arduino pinout  */
+
+				MX6QDL_PAD_GPIO_0__CCM_CLKO1    0x030b0
+
+
+				//MX6QDL_PAD_GPIO_1__GPIO1_IO01     0x80000000
+				//MX6QDL_PAD_GPIO_7__GPIO1_IO07     0x80000000 //can
+                                //MX6QDL_PAD_GPIO_8__GPIO1_IO08     0x80000000 //can
+                                //MX6QDL_PAD_GPIO_9__GPIO1_IO09     0x80000000
+				/*MX6QDL_PAD_SD1_DAT1__GPIO1_IO17   0x80000000
+                                MX6QDL_PAD_SD1_CMD__GPIO1_IO18    0x80000000
+                                MX6QDL_PAD_SD1_DAT2__GPIO1_IO19   0x80000000
+				MX6QDL_PAD_SD1_DAT3__GPIO1_IO21   0x80000000
+                                MX6QDL_PAD_ENET_TX_EN__GPIO1_IO28 0x80000000
+                                MX6QDL_PAD_NANDF_D0__GPIO2_IO00   0x80000000
+                                MX6QDL_PAD_NANDF_D1__GPIO2_IO01   0x80000000
+                                MX6QDL_PAD_NANDF_D2__GPIO2_IO02   0x80000000
+                                MX6QDL_PAD_NANDF_D3__GPIO2_IO03   0x80000000
+				MX6QDL_PAD_SD4_DAT0__GPIO2_IO08   0x80000000
+                                MX6QDL_PAD_SD4_DAT1__GPIO2_IO09   0x80000000
+                                MX6QDL_PAD_SD4_DAT2__GPIO2_IO10   0x80000000
+				MX6QDL_PAD_EIM_A22__GPIO2_IO16    0x80000000
+                                MX6QDL_PAD_EIM_A21__GPIO2_IO17    0x80000000
+                                MX6QDL_PAD_EIM_A20__GPIO2_IO18    0x80000000
+				MX6QDL_PAD_EIM_A18__GPIO2_IO20    0x80000000
+                                MX6QDL_PAD_EIM_A17__GPIO2_IO21    0x80000000
+                                MX6QDL_PAD_EIM_A16__GPIO2_IO22    0x80000000
+                                MX6QDL_PAD_EIM_CS0__GPIO2_IO23    0x80000000
+                                MX6QDL_PAD_EIM_CS1__GPIO2_IO24    0x80000000
+                                MX6QDL_PAD_EIM_OE__GPIO2_IO25     0x80000000
+				MX6QDL_PAD_EIM_D19__GPIO3_IO19    0x80000000
+                                //MX6QDL_PAD_EIM_D23__GPIO3_IO23    0x80000000
+                                MX6QDL_PAD_EIM_D24__GPIO3_IO24    0x80000000
+                                MX6QDL_PAD_EIM_D25__GPIO3_IO25    0x80000000
+                                MX6QDL_PAD_GPIO_19__GPIO4_IO05    0x80000000
+                                //MX6QDL_PAD_KEY_COL0__GPIO4_IO06   0x80000000
+                                //MX6QDL_PAD_KEY_ROW0__GPIO4_IO07   0x80000000
+                                MX6QDL_PAD_KEY_COL1__GPIO4_IO08   0x80000000
+                                MX6QDL_PAD_KEY_ROW1__GPIO4_IO09   0x80000000
+				MX6QDL_PAD_DISP0_DAT6__GPIO4_IO27 0x80000000
+                                MX6QDL_PAD_DISP0_DAT7__GPIO4_IO28 0x80000000
+                                MX6QDL_PAD_DISP0_DAT8__GPIO4_IO29 0x80000000
+                                MX6QDL_PAD_DISP0_DAT9__GPIO4_IO30 0x80000000
+                                MX6QDL_PAD_DISP0_DAT10__GPIO4_IO31        0x80000000
+				//MX6QDL_PAD_EIM_A25__GPIO5_IO02    0x80000000
+                                MX6QDL_PAD_EIM_A24__GPIO5_IO04    0x80000000
+                                MX6QDL_PAD_DISP0_DAT11__GPIO5_IO05        0x80000000
+                                MX6QDL_PAD_DISP0_DAT12__GPIO5_IO06        0x80000000
+                                MX6QDL_PAD_DISP0_DAT13__GPIO5_IO07        0x80000000
+                                MX6QDL_PAD_DISP0_DAT14__GPIO5_IO08        0x80000000
+                                MX6QDL_PAD_DISP0_DAT15__GPIO5_IO09        0x80000000
+                                MX6QDL_PAD_DISP0_DAT16__GPIO5_IO10        0x80000000
+                                MX6QDL_PAD_DISP0_DAT17__GPIO5_IO11        0x80000000
+                                MX6QDL_PAD_DISP0_DAT18__GPIO5_IO12        0x80000000
+                                MX6QDL_PAD_DISP0_DAT19__GPIO5_IO13        0x80000000
+                                MX6QDL_PAD_DISP0_DAT20__GPIO5_IO14        0x80000000
+                                MX6QDL_PAD_DISP0_DAT21__GPIO5_IO15        0x80000000
+                                MX6QDL_PAD_DISP0_DAT22__GPIO5_IO16        0x80000000
+                                MX6QDL_PAD_DISP0_DAT23__GPIO5_IO17        0x80000000
+                                MX6QDL_PAD_CSI0_DAT4__GPIO5_IO22  0x80000000
+				MX6QDL_PAD_CSI0_DAT13__GPIO5_IO31 0x80000000
+                                MX6QDL_PAD_CSI0_DAT12__GPIO5_IO30 0x80000000
+                                MX6QDL_PAD_CSI0_DAT14__GPIO6_IO00 0x80000000
+                                MX6QDL_PAD_CSI0_DAT15__GPIO6_IO01 0x80000000
+                                MX6QDL_PAD_CSI0_DAT16__GPIO6_IO02 0x80000000
+                                MX6QDL_PAD_EIM_A23__GPIO6_IO06    0x80000000
+				//MX6QDL_PAD_RGMII_RX_CTL__GPIO6_IO24       0x80000000
+                                //MX6QDL_PAD_RGMII_RD0__GPIO6_IO25  0x80000000
+                                //MX6QDL_PAD_RGMII_RD1__GPIO6_IO27  0x80000000
+                               // MX6QDL_PAD_RGMII_RD2__GPIO6_IO28  0x80000000
+                               // MX6QDL_PAD_RGMII_RD3__GPIO6_IO29  0x80000000
+                                MX6QDL_PAD_GPIO_18__GPIO7_IO13    0x80000000
+
+*/
+
 			>;
 		};
 
@@ -308,7 +384,7 @@
                 
 		/*pinctrl_gpio: gpiogrp {
                         fsl,pins = <
-                                MX6QDL_PAD_CSI0_DAT11__GPIO5_IO29 0x1b0b0       //M3
+                                MX6QDL_PAD_CSI0_DAT11__GPIO5_IO29 0x1b0b0       //M3 -0x80000000
                                 MX6QDL_PAD_CSI0_DAT10__GPIO5_IO28 0x1b0b0       //M1
                                 MX6QDL_PAD_SD1_CLK__GPIO1_IO20 0x1b0b0          //D20
                                 MX6QDL_PAD_SD1_DAT0__GPIO1_IO16 0x1b0b0         //A21
@@ -412,6 +488,18 @@
                                 MX6QDL_PAD_EIM_A25__HDMI_TX_CEC_LINE 0x1f8b0
                         >;
                 };
+
+		ac97link_warm_reset: audmuxgrp_warmreset {
+                        fsl,pins = <
+                                MX6QDL_PAD_EIM_EB2__GPIO2_IO30    0x80000000  /* audio reset    */
+                        >;
+                };
+
+		ac97link_reset: audmuxgrp_reset {
+                        fsl,pins = <
+				MX6QDL_PAD_EIM_EB2__GPIO2_IO30 0x80000000
+                        >;
+                };
 	};
 };
 
@@ -496,10 +584,16 @@
 };
 
 &ssi1 {
+//        pinctrl-names = "default", "ac97-running", "ac97-reset", "ac97-warm-reset";
+//        pinctrl-0 = <&pinctrl_audmux>;
+//        pinctrl-1 = <&pinctrl_audmux>;
+//        pinctrl-2 = <&ac97link_reset>;
+//        pinctrl-3 = <&ac97link_warm_reset>;
+//        ac97-gpios = <&gpio2 22 0 &gpio2 24 0 &gpio2 30 0>;
         fsl,mode = "ac97-slave";
         codec-handle = <1>;
-        //ac97-reset = <&gpio2 30 0>;
         status = "okay";
+        ac97-reset = <&gpio2 30 0>;
 };
 
 &spdif {
@@ -507,4 +601,3 @@
         pinctrl-0 = <&pinctrl_spdif_1>;
         status = "disabled";
 };
-
