@@ -2171,7 +2171,7 @@ static int mxc_vout_setup_output(struct mxc_vout_dev *dev)
 		mutex_init(&vout->task_lock);
 
 		strlcpy(vout->vfd->name, fbi->fix.id, sizeof(vout->vfd->name));
-
+        	
 		video_set_drvdata(vout->vfd, vout);
 
 		if (video_register_device(vout->vfd,
@@ -2209,15 +2209,15 @@ static int mxc_vout_probe(struct platform_device *pdev)
 	*dev->dev->dma_mask = DMA_BIT_MASK(32);
 	dev->dev->coherent_dma_mask = DMA_BIT_MASK(32);
 
-	ret = v4l2_device_register(dev->dev, &dev->v4l2_dev);
-	if (ret) {
-		dev_err(dev->dev, "v4l2_device_register failed\n");
-		goto free_dev;
-	}
+        ret = v4l2_device_register(dev->dev, &dev->v4l2_dev);
+        if (ret) {
+                dev_err(dev->dev, "v4l2_device_register failed\n");
+                goto free_dev;
+        }
 
-	ret = mxc_vout_setup_output(dev);
-	if (ret < 0)
-		goto rel_vdev;
+        ret = mxc_vout_setup_output(dev);
+        if (ret < 0)
+                goto rel_vdev;
 
 	return 0;
 
