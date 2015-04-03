@@ -17,8 +17,14 @@ obj-$(CONFIG_MXC_CAMERA_OV5642) += ov5642_camera.o
 ov5640_camera_mipi-objs := ov5640_mipi.o
 obj-$(CONFIG_MXC_CAMERA_OV5640_MIPI) += ov5640_camera_mipi.o
 
+tc358743_h2c_bridge-objs := tc358743_h2c.o
+obj-$(CONFIG_MXC_HDMI_CSI2_TC358743) += tc358743_h2c_bridge.o
+
 adv7180_tvin-objs := adv7180.o
 obj-$(CONFIG_MXC_TVIN_ADV7180) += adv7180_tvin.o
 
 mxc_vadc_tvin-objs := mxc_vadc.o
 obj-$(CONFIG_MXC_VADC) += mxc_vadc_tvin.o
+
+gs2971_video-objs := gs2971.o
+obj-$(CONFIG_MXC_VIDEO_GS2971) += gs2971_video.o
