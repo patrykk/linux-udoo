@@ -83,9 +83,13 @@ extern int unsigned long iram_tlb_base_addr;
 
 extern int init_mmdc_lpddr2_settings(struct platform_device *dev);
 extern int init_mmdc_ddr3_settings_imx6q(struct platform_device *dev);
+#ifdef CONFIG_SOC_IMX6SX
 extern int init_mmdc_ddr3_settings_imx6sx(struct platform_device *dev);
+#endif
 extern int update_ddr_freq_imx6q(int ddr_rate);
+#ifdef CONFIG_SOC_IMX6SX
 extern int update_ddr_freq_imx6sx(int ddr_rate);
+#endif
 extern int update_lpddr2_freq(int ddr_rate);
 
 DEFINE_MUTEX(bus_freq_mutex);
@@ -165,8 +169,8 @@ static void enter_lpm_imx6sx(void)
 			pr_err("M4 is NOT in sleep!!!\n");
 
 	/* set periph_clk2 to source from OSC for periph */
-	imx_clk_set_parent(periph_clk2_sel, osc_clk);
-	imx_clk_set_parent(periph_clk, periph_clk2);
+	clk_set_parent(periph_clk2_sel, osc_clk);
+	clk_set_parent(periph_clk, periph_clk2);
 	/* set ahb/ocram to 24MHz */
 	imx_clk_set_rate(ahb_clk, LPAPM_CLK);
 	imx_clk_set_rate(ocram_clk, LPAPM_CLK);
@@ -174,13 +178,15 @@ static void enter_lpm_imx6sx(void)
 	if (audio_bus_count) {
 		/* Need to ensure that PLL2_PFD_400M is kept ON. */
 		clk_prepare_enable(pll2_400);
+#ifdef CONFIG_SOC_IMX6SX
 		if (ddr_type == MMDC_MDMISC_DDR_TYPE_DDR3)
 			update_ddr_freq_imx6sx(DDR3_AUDIO_CLK);
 		else if (ddr_type == MMDC_MDMISC_DDR_TYPE_LPDDR2)
 			update_lpddr2_freq(LPDDR2_AUDIO_CLK);
-		imx_clk_set_parent(periph2_clk2_sel, pll3);
-		imx_clk_set_parent(periph2_pre_clk, pll2_400);
-		imx_clk_set_parent(periph2_clk, periph2_pre_clk);
+#endif
+		clk_set_parent(periph2_clk2_sel, pll3);
+		clk_set_parent(periph2_pre_clk, pll2_400);
+		clk_set_parent(periph2_clk, periph2_pre_clk);
 		/*
 		 * As periph2_clk's parent is not changed from
 		 * high mode to audio mode, so clk framework
@@ -199,12 +205,14 @@ static void enter_lpm_imx6sx(void)
 		audio_bus_freq_mode = 1;
 		low_bus_freq_mode = 0;
 	} else {
+#ifdef CONFIG_SOC_IMX6SX
 		if (ddr_type == MMDC_MDMISC_DDR_TYPE_DDR3)
 			update_ddr_freq_imx6sx(LPAPM_CLK);
 		else if (ddr_type == MMDC_MDMISC_DDR_TYPE_LPDDR2)
 			update_lpddr2_freq(LPAPM_CLK);
-		imx_clk_set_parent(periph2_clk2_sel, osc_clk);
-		imx_clk_set_parent(periph2_clk, periph2_clk2);
+#endif
+		clk_set_parent(periph2_clk2_sel, osc_clk);
+		clk_set_parent(periph2_clk, periph2_clk2);
 
 		if (audio_bus_freq_mode)
 			clk_disable_unprepare(pll2_400);
@@ -224,19 +232,20 @@ static void exit_lpm_imx6sx(void)
 	imx_clk_set_rate(ahb_clk, LPAPM_CLK / 3);
 	imx_clk_set_rate(ocram_clk, LPAPM_CLK / 2);
 	/* set periph_clk2 to pll3 */
-	imx_clk_set_parent(periph_clk2_sel, pll3);
+	clk_set_parent(periph_clk2_sel, pll3);
 	/* set periph clk to from pll2_400 */
-	imx_clk_set_parent(periph_pre_clk, pll2_400);
-	imx_clk_set_parent(periph_clk, periph_pre_clk);
-
+	clk_set_parent(periph_pre_clk, pll2_400);
+	clk_set_parent(periph_clk, periph_pre_clk);
+#ifdef CONFIG_SOC_IMX6SX
 	if (ddr_type == MMDC_MDMISC_DDR_TYPE_DDR3)
 		update_ddr_freq_imx6sx(ddr_normal_rate);
 	else if (ddr_type == MMDC_MDMISC_DDR_TYPE_LPDDR2)
 		update_lpddr2_freq(ddr_normal_rate);
+#endif
 	/* correct parent info after ddr freq change in asm code */
-	imx_clk_set_parent(periph2_pre_clk, pll2_400);
-	imx_clk_set_parent(periph2_clk, periph2_pre_clk);
-	imx_clk_set_parent(periph2_clk2_sel, pll3);
+	clk_set_parent(periph2_pre_clk, pll2_400);
+	clk_set_parent(periph2_clk, periph2_pre_clk);
+	clk_set_parent(periph2_clk2_sel, pll3);
 
 	/*
 	 * As periph2_clk's parent is not changed from
@@ -261,8 +270,8 @@ static void enter_lpm_imx6sl(void)
 	if (high_bus_freq_mode) {
 		pll2_org_rate = clk_get_rate(pll2_bus);
 		/* Set periph_clk to be sourced from OSC_CLK */
-		imx_clk_set_parent(periph_clk2_sel, osc_clk);
-		imx_clk_set_parent(periph_clk, periph_clk2);
+		clk_set_parent(periph_clk2_sel, osc_clk);
+		clk_set_parent(periph_clk, periph_clk2);
 		/* Ensure AHB/AXI clks are at 24MHz. */
 		imx_clk_set_rate(ahb_clk, LPAPM_CLK);
 		imx_clk_set_rate(ocram_clk, LPAPM_CLK);
@@ -275,8 +284,8 @@ static void enter_lpm_imx6sl(void)
 		update_lpddr2_freq(LPDDR2_AUDIO_CLK);
 
 		/* Fix the clock tree in kernel */
-		imx_clk_set_parent(periph2_pre_clk, pll2_200);
-		imx_clk_set_parent(periph2_clk, periph2_pre_clk);
+		clk_set_parent(periph2_pre_clk, pll2_200);
+		clk_set_parent(periph2_clk, periph2_pre_clk);
 
 		if (low_bus_freq_mode || ultra_low_bus_freq_mode) {
 			/*
@@ -284,13 +293,13 @@ static void enter_lpm_imx6sl(void)
 			 * pll2_bypass is updated as it is
 			 * sourced from PLL2.
 			 */
-			imx_clk_set_parent(pll2_bypass, pll2);
+			clk_set_parent(pll2_bypass, pll2);
 			/*
 			 * Swtich ARM to run off PLL2_PFD2_400MHz
 			 * since DDR is anyway at 100MHz.
 			 */
-			imx_clk_set_parent(step_clk, pll2_400);
-			imx_clk_set_parent(pll1_sw_clk, step_clk);
+			clk_set_parent(step_clk, pll2_400);
+			clk_set_parent(pll1_sw_clk, step_clk);
 			/*
 			  * Need to ensure that PLL1 is bypassed and enabled
 			  * before ARM-PODF is set.
@@ -354,7 +363,7 @@ static void enter_lpm_imx6sl(void)
 				 */
 				imx_clk_set_rate(cpu_clk, org_arm_rate / arm_div);
 				/* Now set the ARM clk parent to PLL1_SYS. */
-				imx_clk_set_parent(pll1_sw_clk, pll1_sys);
+				clk_set_parent(pll1_sw_clk, pll1_sys);
 
 				/*
 				 * Set STEP_CLK back to OSC to save power and
@@ -364,7 +373,7 @@ static void enter_lpm_imx6sl(void)
 				 * to change the step_clk parent to pll2_pfd2_400M
 				 * is requested sometime later, the change is ignored.
 				 */
-				imx_clk_set_parent(step_clk, osc_clk);
+				clk_set_parent(step_clk, osc_clk);
 				/* Now set DDR to 24MHz. */
 				update_lpddr2_freq(LPAPM_CLK);
 
@@ -373,9 +382,9 @@ static void enter_lpm_imx6sl(void)
 				 * Make sure PLL2 rate is updated as it gets
 				 * bypassed in the DDR freq change code.
 				 */
-				imx_clk_set_parent(pll2_bypass, pll2_bypass_src);
-				imx_clk_set_parent(periph2_clk2_sel, pll2_bus);
-				imx_clk_set_parent(periph2_clk, periph2_clk2);
+				clk_set_parent(pll2_bypass, pll2_bypass_src);
+				clk_set_parent(periph2_clk2_sel, pll2_bus);
+				clk_set_parent(periph2_clk, periph2_clk2);
 
 			}
 			if (low_bus_count == 0) {
@@ -400,24 +409,24 @@ static void exit_lpm_imx6sl(void)
 	 * Make sure PLL2 rate is updated as it gets
 	 * un-bypassed in the DDR freq change code.
 	 */
-	imx_clk_set_parent(pll2_bypass, pll2);
-	imx_clk_set_parent(periph2_pre_clk, pll2_400);
-	imx_clk_set_parent(periph2_clk, periph2_pre_clk);
+	clk_set_parent(pll2_bypass, pll2);
+	clk_set_parent(periph2_pre_clk, pll2_400);
+	clk_set_parent(periph2_clk, periph2_pre_clk);
 
 	/* Ensure that periph_clk is sourced from PLL2_400. */
-	imx_clk_set_parent(periph_pre_clk, pll2_400);
+	clk_set_parent(periph_pre_clk, pll2_400);
 	/*
 	 * Before switching the perhiph_clk, ensure that the
 	 * AHB/AXI will not be too fast.
 	 */
 	imx_clk_set_rate(ahb_clk, LPAPM_CLK / 3);
 	imx_clk_set_rate(ocram_clk, LPAPM_CLK / 2);
-	imx_clk_set_parent(periph_clk, periph_pre_clk);
+	clk_set_parent(periph_clk, periph_pre_clk);
 
 	if (low_bus_freq_mode || ultra_low_bus_freq_mode) {
 		/* Move ARM from PLL1_SW_CLK to PLL2_400. */
-		imx_clk_set_parent(step_clk, pll2_400);
-		imx_clk_set_parent(pll1_sw_clk, step_clk);
+		clk_set_parent(step_clk, pll2_400);
+		clk_set_parent(pll1_sw_clk, step_clk);
 		/*
 		  * Need to ensure that PLL1 is bypassed and enabled
 		  * before ARM-PODF is set.
@@ -442,24 +451,24 @@ static void reduce_bus_freq(void)
 	else {
 		if (cpu_is_imx6dl())
 			/* Set axi to periph_clk */
-			imx_clk_set_parent(axi_sel_clk, periph_clk);
+			clk_set_parent(axi_sel_clk, periph_clk);
 
 		if (audio_bus_count) {
 			/* Need to ensure that PLL2_PFD_400M is kept ON. */
 			clk_prepare_enable(pll2_400);
 			update_ddr_freq_imx6q(DDR3_AUDIO_CLK);
 			/* Make sure periph clk's parent also got updated */
-			imx_clk_set_parent(periph_clk2_sel, pll3);
-			imx_clk_set_parent(periph_pre_clk, pll2_200);
-			imx_clk_set_parent(periph_clk, periph_pre_clk);
+			clk_set_parent(periph_clk2_sel, pll3);
+			clk_set_parent(periph_pre_clk, pll2_200);
+			clk_set_parent(periph_clk, periph_pre_clk);
 			audio_bus_freq_mode = 1;
 			low_bus_freq_mode = 0;
 		} else {
 			update_ddr_freq_imx6q(LPAPM_CLK);
 			/* Make sure periph clk's parent also got updated */
-			imx_clk_set_parent(periph_clk2_sel, osc_clk);
+			clk_set_parent(periph_clk2_sel, osc_clk);
 			/* Set periph_clk parent to OSC via periph_clk2_sel */
-			imx_clk_set_parent(periph_clk, periph_clk2);
+			clk_set_parent(periph_clk, periph_clk2);
 			if (audio_bus_freq_mode)
 				clk_disable_unprepare(pll2_400);
 			low_bus_freq_mode = 1;
@@ -563,21 +572,21 @@ static int set_high_bus_freq(int high_bus_freq)
 			clk_prepare_enable(pll2_400);
 			update_ddr_freq_imx6q(ddr_normal_rate);
 			/* Make sure periph clk's parent also got updated */
-			imx_clk_set_parent(periph_clk2_sel, pll3);
-			imx_clk_set_parent(periph_pre_clk, periph_clk_parent);
-			imx_clk_set_parent(periph_clk, periph_pre_clk);
+			clk_set_parent(periph_clk2_sel, pll3);
+			clk_set_parent(periph_pre_clk, periph_clk_parent);
+			clk_set_parent(periph_clk, periph_pre_clk);
 			if (cpu_is_imx6dl()) {
 				/* Set axi to pll3_pfd1_540m */
-				imx_clk_set_parent(axi_alt_sel_clk, pll3_pfd1_540m);
-				imx_clk_set_parent(axi_sel_clk, axi_alt_sel_clk);
+				clk_set_parent(axi_alt_sel_clk, pll3_pfd1_540m);
+				clk_set_parent(axi_sel_clk, axi_alt_sel_clk);
 			}
 			clk_disable_unprepare(pll2_400);
 		} else {
 			update_ddr_freq_imx6q(ddr_med_rate);
 			/* Make sure periph clk's parent also got updated */
-			imx_clk_set_parent(periph_clk2_sel, pll3);
-			imx_clk_set_parent(periph_pre_clk, pll2_400);
-			imx_clk_set_parent(periph_clk, periph_pre_clk);
+			clk_set_parent(periph_clk2_sel, pll3);
+			clk_set_parent(periph_pre_clk, pll2_400);
+			clk_set_parent(periph_clk, periph_pre_clk);
 		}
 		if (audio_bus_freq_mode)
 			clk_disable_unprepare(pll2_400);
@@ -748,7 +757,7 @@ static int __init imx6_dt_find_ddr_sram(unsigned long node,
 	__be32 *prop;
 
 	if (of_flat_dt_match(node, ddr_freq_iram_match)) {
-		unsigned long len;
+		int len; // unsigned long
 		prop = of_get_flat_dt_prop(node, "reg", &len);
 		if (prop == NULL || len != (sizeof(unsigned long) * 2))
 			return EINVAL;
@@ -1162,6 +1171,7 @@ static int busfreq_probe(struct platform_device *pdev)
 	if (cpu_is_imx6sl()) {
 		err = init_mmdc_lpddr2_settings(pdev);
 	} else if (cpu_is_imx6sx()) {
+#ifdef CONFIG_SOC_IMX6SX
 		ddr_type = imx_mmdc_get_ddr_type();
 		/* check whether it is a DDR3 or LPDDR2 board */
 		if (ddr_type == MMDC_MDMISC_DDR_TYPE_DDR3)
@@ -1172,6 +1182,8 @@ static int busfreq_probe(struct platform_device *pdev)
 		if (imx_src_is_m4_enabled() &&
 			(clk_get_rate(m4_clk) > LPAPM_CLK))
 			high_bus_count++;
+#endif
+	//
 	} else {
 		err = init_mmdc_ddr3_settings_imx6q(pdev);
 	}
