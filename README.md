@@ -76,17 +76,16 @@ Work:
  - imx watchdog
  - imx thermal
  - GPIO - (check documentation for pins scheme and execute f.ex. "echo 40 > /sys/class/gpio/export" for gpio40)
- - PWM (for inverted polarity need small patch) 
+ - PWM 
  - SATA - on quad
  - CAN (xcvr problem)
  - Arduino with Udoo patch (export gpio 0 and 117: "echo 0 > /sys/class/gpio/export; echo 117 > /sys/class/gpio/export")
  - XBMC 
  - gstream vpu
-
+ - freescale camera (no tested - need some tester)
 
 Doesn't Work
 
  - CAAM (very unstable)
  - PCIe
- - freescale camera
 
