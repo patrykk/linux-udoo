@@ -1,11 +1,14 @@
 linux-udoo
 ==========
 
-Linux Udoo Kernel - 3.18.x
------------------
+Linux Udoo Kernel - 4.0.x
+This branch will base on 3.14.28-ga freescales kernel
 
 Howto install:
+-----------------
 
+Configure kernel
+    make menuconfig (or some other way)
 
 Compile kernel
 
@@ -38,13 +41,19 @@ Versions
 --------
 
 This has been tested with:
- - uboot-udoo-quad 2014.04, 
+ - uboot-udoo-quad 2014.10 
  - libcec-imx6 13.20141201
- - xf86-video-imx-viv 3.10.31_1.1.0 beta
- - gst-imx 0.9.9
- - imx-lib 3.10.31_1.1.0
- - imx-vpu 3.10.31_1.1.0
+ - xf86-video-imx-viv 3.10.53_1.1.0 (for lxdm need some patch)
+ - gst-imx 0.10.0
+ - imx-lib 3.10.53_1.1.0
+ - imx-vpu 5.4.27-1
  - firmware-imx 3.10.31_1.1.0
+ - imx-gpu-viv-g2d 5.0.11.p4.1 (previous name: gpu-viv-g2d) 
+ - imx-gpu-viv-(x11|fb) 5.0.11.p4.1 (previous name: gpu-viv-bin-mx6q)
+ - libfslvpuwrap 1.0.57
+ - libimxvpuapi
+ - Xorg server 1.16.x
+ - libcec-imx6 13.20141201
 
 
 What Works and What Doesn't
@@ -66,8 +75,11 @@ Work:
  - OTG (f.ex. modprobe g_mass_storage file=/dev/mmcblk0p1)
  - imx watchdog
  - imx thermal
-
- 
+ - GPIO - (check documentation for pins scheme and execute f.ex. "echo 40 > /sys/class/gpio/export" for gpio40)
+ - PWM (for inverted polarity need small patch) 
+ - SATA - on quad
+ - CAN (xcvr problem)
+ - Arduino with Udoo patch (export gpio 0 and 117: "echo 0 > /sys/class/gpio/export; echo 117 > /sys/class/gpio/export")
  - XBMC 
  - gstream vpu
 
