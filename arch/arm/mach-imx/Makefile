@@ -85,6 +85,19 @@ obj-$(CONFIG_SOC_IMX6SL) += mach-imx6sl.o
 obj-$(CONFIG_SOC_IMX6SX) += mach-imx6sx.o
 obj-$(CONFIG_SOC_IMX7D) += mach-imx7d.o
 
+ifeq ($(CONFIG_ARM_IMX6Q_CPUFREQ),y)
+obj-y += busfreq-imx6.o
+AFLAGS_ddr3_freq_imx6.o :=-Wa,-march=armv7-a
+obj-$(CONFIG_SOC_IMX6Q) += ddr3_freq_imx6.o busfreq_ddr3.o
+AFLAGS_lpddr2_freq_imx6.o :=-Wa,-march=armv7-a
+AFLAGS_imx6sl_lpm_wfi.o :=-Wa,-march=armv7-a
+obj-$(CONFIG_SOC_IMX6SL) += busfreq_lpddr2.o lpddr2_freq_imx6.o imx6sl_lpm_wfi.o
+AFLAGS_lpddr2_freq_imx6sx.o :=-Wa,-march=armv7-a
+AFLAGS_ddr3_freq_imx6sx.o :=-Wa,-march=armv7-a
+AFLAGS_imx6sx_low_power_idle.o :=-Wa,-march=armv7-a
+obj-$(CONFIG_SOC_IMX6SX) += ddr3_freq_imx6sx.o lpddr2_freq_imx6sx.o imx6sx_low_power_idle.o
+endif
+
 ifeq ($(CONFIG_SUSPEND),y)
 AFLAGS_suspend-imx6.o :=-Wa,-march=armv7-a
 obj-$(CONFIG_SOC_IMX6) += suspend-imx6.o
