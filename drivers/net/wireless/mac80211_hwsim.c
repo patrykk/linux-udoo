@@ -1893,13 +1893,10 @@ static void mac80211_hwsim_sw_scan(struct ieee80211_hw *hw,
 		goto out;
 	}
 
-<<<<<<< HEAD
 	printk(KERN_DEBUG "hwsim sw_scan request, prepping stuff\n");
 
 	memcpy(hwsim->scan_addr, mac_addr, ETH_ALEN);
-=======
 	//printk(KERN_DEBUG "hwsim sw_scan request, prepping stuff\n");
->>>>>>> 899d3c6... Remove some debug messages from mac80211 because of dmesg flood.
 	hwsim->scanning = true;
 
 out:
