@@ -1893,10 +1893,9 @@ static void mac80211_hwsim_sw_scan(struct ieee80211_hw *hw,
 		goto out;
 	}
 
-	printk(KERN_DEBUG "hwsim sw_scan request, prepping stuff\n");
+	//printk(KERN_DEBUG "hwsim sw_scan request, prepping stuff\n");
 
 	memcpy(hwsim->scan_addr, mac_addr, ETH_ALEN);
-	//printk(KERN_DEBUG "hwsim sw_scan request, prepping stuff\n");
 	hwsim->scanning = true;
 
 out:
