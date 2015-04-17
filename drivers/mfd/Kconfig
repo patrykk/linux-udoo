@@ -195,7 +195,6 @@ config MFD_DA9063
 	  Additional drivers must be enabled in order to use the functionality
 	  of the device.
 
-<<<<<<< HEAD
 config MFD_DA9150
 	tristate "Dialog Semiconductor DA9150 Charger Fuel-Gauge chip"
 	depends on I2C=y
@@ -217,14 +216,13 @@ config MFD_DLN2
 	  DLN-2. Additional drivers such as I2C_DLN2, GPIO_DLN2,
 	  etc. must be enabled in order to use the functionality of
 	  the device.
-=======
+
 config MFD_MXC_HDMI
         tristate "Freescale HDMI Core"
         select MFD_CORE
         help
           This is the core driver for the Freescale i.MX6 on-chip HDMI.
           This MFD driver connects with the video and audio drivers for HDMI.
->>>>>>> e7ff6da... Add freescale HDMI Core - base on freescale kernel 3.10.53
 
 config MFD_MC13XXX
 	tristate
