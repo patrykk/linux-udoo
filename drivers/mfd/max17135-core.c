@@ -271,8 +271,6 @@ static struct i2c_driver max17135_driver = {
 	},
 	.probe = max17135_probe,
 	.remove = max17135_remove,
-	.suspend = max17135_suspend,
-	.resume = max17135_resume,
 	.id_table = max17135_id,
 	.detect = max17135_detect,
 	.address_list = &normal_i2c[0],
