@@ -2036,7 +2036,7 @@ static int mxc_mlb150_release(struct inode *inode, struct file *filp)
 static long mxc_mlb150_ioctl(struct file *filp,
 			 unsigned int cmd, unsigned long arg)
 {
-	struct inode *inode = filp->f_dentry->d_inode;
+	struct inode *inode = filp->f_path.dentry->d_inode;
 	struct mlb_data *drvdata = filp->private_data;
 	struct mlb_dev_info *pdevinfo = drvdata->devinfo;
 	void __user *argp = (void __user *)arg;
@@ -2357,7 +2357,7 @@ static ssize_t mxc_mlb150_write(struct file *filp, const char __user *buf,
 	unsigned long flags;
 
 	/*
-	 * minor = MINOR(filp->f_dentry->d_inode->i_rdev);
+	 * minor = MINOR(filp->f_path.dentry->d_inode->i_rdev);
 	 */
 	pchinfo = &pdevinfo->channels[TX_CHANNEL];
 
@@ -2452,7 +2452,7 @@ static unsigned int mxc_mlb150_poll(struct file *filp,
 	unsigned long flags;
 
 
-	minor = MINOR(filp->f_dentry->d_inode->i_rdev);
+	minor = MINOR(filp->f_path.dentry->d_inode->i_rdev);
 
 	poll_wait(filp, &pdevinfo->rx_wq, wait);
 	poll_wait(filp, &pdevinfo->tx_wq, wait);
