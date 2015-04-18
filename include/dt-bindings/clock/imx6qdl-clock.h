@@ -251,6 +251,7 @@
 #define IMX6QDL_CLK_CAAM_MEM			238
 #define IMX6QDL_CLK_CAAM_ACLK			239
 #define IMX6QDL_CLK_CAAM_IPG			240
-#define IMX6QDL_CLK_END				241
+#define IMX6QDL_CLK_AXI_ALT_SEL                 241
+#define IMX6QDL_CLK_END				242
 
 #endif /* __DT_BINDINGS_CLOCK_IMX6QDL_H */

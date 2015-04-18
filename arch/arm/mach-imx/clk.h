@@ -132,6 +132,15 @@ static inline struct clk *imx_clk_fixed_factor(const char *name,
 			CLK_SET_RATE_PARENT, mult, div);
 }
 
+static inline void imx_clk_set_rate(struct clk *clk, unsigned long rate)
+{
+        int ret = clk_set_rate(clk, rate);
+
+        if (ret)
+                pr_err("failed to set rate of clk %s to %ld: %d\n",
+                        __clk_get_name(clk), rate, ret);
+}
+
 struct clk *imx_clk_cpu(const char *name, const char *parent_name,
 		struct clk *div, struct clk *mux, struct clk *pll,
 		struct clk *step);
