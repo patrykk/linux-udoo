@@ -53,7 +53,9 @@ extern unsigned int ddr_normal_rate;
 extern int low_bus_freq_mode;
 extern int ultra_low_bus_freq_mode;
 extern void mx6_lpddr2_freq_change(u32 freq, int bus_freq_mode);
+#ifdef CONFIG_SOC_IMX6SX
 extern void imx6sx_lpddr2_freq_change(u32 freq, int bus_freq_mode);
+#endif
 extern unsigned long save_ttbr1(void);
 extern void restore_ttbr1(unsigned long ttbr1);
 extern unsigned long ddr_freq_change_iram_base;
@@ -97,14 +99,19 @@ int init_mmdc_lpddr2_settings(struct platform_device *busfreq_pdev)
 
 	ddr_code_size = (&imx6_lpddr2_freq_change_end -&imx6_lpddr2_freq_change_start) *4;
 
-	if (cpu_is_imx6sl())
+	if (cpu_is_imx6sl()){
+#ifdef CONFIG_SOC_IMX6SL
 		mx6_change_lpddr2_freq = (void *)fncpy(
 			(void *)ddr_freq_change_iram_base,
 			&mx6_lpddr2_freq_change, ddr_code_size);
-	else if (cpu_is_imx6sx())
+#endif
+	} else if (cpu_is_imx6sx()){
+#ifdef CONFIG_SOC_IMX6SX
 		mx6_change_lpddr2_freq = (void *)fncpy(
 			(void *)ddr_freq_change_iram_base,
 			&imx6sx_lpddr2_freq_change, ddr_code_size);
+#endif
+	}
 
 	curr_ddr_rate = ddr_normal_rate;
 
