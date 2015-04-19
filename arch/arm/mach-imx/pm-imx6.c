@@ -14,16 +14,24 @@
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/irq.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
+#include <linux/of_device.h>
+#include <linux/of_fdt.h>
+#include <linux/of_irq.h>
+#include <linux/suspend.h>
 #include <linux/genalloc.h>
 #include <linux/mfd/syscon.h>
 #include <linux/mfd/syscon/imx6q-iomuxc-gpr.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
+#include <linux/of_fdt.h>
 #include <linux/of_platform.h>
 #include <linux/regmap.h>
 #include <linux/suspend.h>
 #include <asm/cacheflush.h>
 #include <asm/fncpy.h>
+#include <asm/mach/map.h>
 #include <asm/proc-fns.h>
 #include <asm/suspend.h>
 #include <asm/tlb.h>
@@ -63,6 +71,9 @@
 
 #define MX6Q_SUSPEND_OCRAM_SIZE		0x1000
 #define MX6_MAX_MMDC_IO_NUM		33
+
+unsigned long iram_tlb_base_addr;
+unsigned long iram_tlb_phys_addr;
 
 static void __iomem *ccm_base;
 static void __iomem *suspend_ocram_base;
@@ -194,6 +205,26 @@ struct imx6_cpu_pm_info {
 	u32 mmdc_io_num; /* Number of MMDC IOs which need saved/restored. */
 	u32 mmdc_io_val[MX6_MAX_MMDC_IO_NUM][2]; /* To save offset and value */
 } __aligned(8);
+
+unsigned long save_ttbr1(void)
+{
+        unsigned long lttbr1;
+        asm volatile(
+                ".align 4\n"
+                "mrc p15, 0, %0, c2, c0, 1\n"
+                : "=r" (lttbr1)
+        );
+        return lttbr1;
+}
+
+void restore_ttbr1(unsigned long ttbr1)
+{
+        asm volatile(
+                ".align 4\n"
+                "mcr p15, 0, %0, c2, c0, 1\n"
+                : : "r" (ttbr1)
+        );
+}
 
 void imx6q_set_int_mem_clk_lpm(bool enable)
 {
@@ -394,6 +425,127 @@ void __init imx6q_pm_set_ccm_base(void __iomem *base)
 {
 	ccm_base = base;
 }
+
+static const char * const low_power_ocram_match[] __initconst = {
+        "fsl,lpm-sram",
+        NULL
+};
+
+static struct map_desc iram_tlb_io_desc __initdata = {
+        /* .virtual and .pfn are run-time assigned */
+        .length     = SZ_1M,
+        .type       = MT_MEMORY_RWX_NONCACHED,
+};
+
+
+static int __init imx6_dt_find_lpsram(unsigned long node, const char *uname,
+                                      int depth, void *data)
+{
+        unsigned long lpram_addr;
+        __be32 *prop;
+
+        if (of_flat_dt_match(node, low_power_ocram_match)) {
+                prop = of_get_flat_dt_prop(node, "reg", NULL);
+                if (!prop)
+                        return -EINVAL;
+
+                lpram_addr = be32_to_cpup(prop);
+
+                /* We need to create a 1M page table entry. */
+                iram_tlb_io_desc.virtual = IMX_IO_P2V(lpram_addr & 0xFFF00000);
+                iram_tlb_io_desc.pfn = __phys_to_pfn(lpram_addr & 0xFFF00000);
+                iram_tlb_phys_addr = lpram_addr;
+                iram_tlb_base_addr = IMX_IO_P2V(lpram_addr);
+
+                iotable_init(&iram_tlb_io_desc, 1);
+        }
+
+        return 0;
+}
+
+static struct map_desc imx6_pm_io_desc[] __initdata = {
+        imx_map_entry(MX6Q, MMDC_P0, MT_DEVICE),
+        imx_map_entry(MX6Q, MMDC_P1, MT_DEVICE),
+        imx_map_entry(MX6Q, SRC, MT_DEVICE),
+        imx_map_entry(MX6Q, IOMUXC, MT_DEVICE),
+        imx_map_entry(MX6Q, CCM, MT_DEVICE),
+        imx_map_entry(MX6Q, ANATOP, MT_DEVICE),
+        imx_map_entry(MX6Q, GPC, MT_DEVICE),
+        imx_map_entry(MX6Q, L2, MT_DEVICE),
+        imx_map_entry(MX6Q, SEMA4, MT_DEVICE),
+};
+
+void __init imx6_pm_map_io(void)
+{
+        unsigned long i;
+
+        iotable_init(imx6_pm_io_desc, ARRAY_SIZE(imx6_pm_io_desc));
+
+        /*
+         * Get the address of IRAM or OCRAM to be used by the low
+         * power code from the device tree.
+         */
+        WARN_ON(of_scan_flat_dt(imx6_dt_find_lpsram, NULL));
+
+        /* Return if no IRAM space is allocated for suspend/resume code. */
+        if (!iram_tlb_base_addr) {
+                pr_warn("No IRAM/OCRAM memory allocated for suspend/resume \
+                         code. Please ensure device tree has an entry for \
+                         fsl,lpm-sram.\n");
+                return;
+        }
+
+        /* Set all entries to 0. */
+        memset((void *)iram_tlb_base_addr, 0, MX6Q_IRAM_TLB_SIZE);
+
+        /*
+         * Make sure the IRAM virtual address has a mapping in the IRAM
+         * page table.
+         *
+         * Only use the top 11 bits [31-20] when storing the physical
+         * address in the page table as only these bits are required
+         * for 1M mapping.
+         */
+        i = ((iram_tlb_base_addr >> 20) << 2) / 4;
+        *((unsigned long *)iram_tlb_base_addr + i) =
+                (iram_tlb_phys_addr & 0xFFF00000) | TT_ATTRIB_NON_CACHEABLE_1M;
+
+        /*
+         * Make sure the AIPS1 virtual address has a mapping in the
+         * IRAM page table.
+         */
+        i = ((IMX_IO_P2V(MX6Q_AIPS1_BASE_ADDR) >> 20) << 2) / 4;
+        *((unsigned long *)iram_tlb_base_addr + i) =
+                (MX6Q_AIPS1_BASE_ADDR & 0xFFF00000) |
+                TT_ATTRIB_NON_CACHEABLE_1M;
+
+        /*
+         * Make sure the AIPS2 virtual address has a mapping in the
+         * IRAM page table.
+         */
+        i = ((IMX_IO_P2V(MX6Q_AIPS2_BASE_ADDR) >> 20) << 2) / 4;
+        *((unsigned long *)iram_tlb_base_addr + i) =
+                (MX6Q_AIPS2_BASE_ADDR & 0xFFF00000) |
+                TT_ATTRIB_NON_CACHEABLE_1M;
+
+        /*
+         * Make sure the AIPS3 virtual address has a mapping
+         * in the IRAM page table.
+         */
+        i = ((IMX_IO_P2V(MX6Q_AIPS3_BASE_ADDR) >> 20) << 2) / 4;
+                *((unsigned long *)iram_tlb_base_addr + i) =
+                (MX6Q_AIPS3_BASE_ADDR & 0xFFF00000) |
+                TT_ATTRIB_NON_CACHEABLE_1M;
+
+        /*
+         * Make sure the L2 controller virtual address has a mapping
+         * in the IRAM page table.
+         */
+        i = ((IMX_IO_P2V(MX6Q_L2_BASE_ADDR) >> 20) << 2) / 4;
+        *((unsigned long *)iram_tlb_base_addr + i) =
+                (MX6Q_L2_BASE_ADDR & 0xFFF00000) | TT_ATTRIB_NON_CACHEABLE_1M;
+}
+
 
 static int __init imx6_pm_get_base(struct imx6_pm_base *base,
 				const char *compat)
