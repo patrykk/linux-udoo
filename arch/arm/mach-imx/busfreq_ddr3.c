@@ -40,6 +40,7 @@
 #include <linux/proc_fs.h>
 #include <linux/sched.h>
 #include <linux/smp.h>
+#include <linux/slab.h>
 
 #include "hardware.h"
 
@@ -98,8 +99,10 @@ extern unsigned long iram_tlb_phys_addr;
 
 extern unsigned long mx6_ddr3_freq_change_start asm("mx6_ddr3_freq_change_start");
 extern unsigned long mx6_ddr3_freq_change_end asm("mx6_ddr3_freq_change_end");
+#ifdef CONFIG_SOC_IMX6SX
 extern unsigned long imx6sx_ddr3_freq_change_start asm("imx6sx_ddr3_freq_change_start");
 extern unsigned long imx6sx_ddr3_freq_change_end asm("imx6sx_ddr3_freq_change_end");
+#endif
 #ifdef CONFIG_SMP
 static unsigned long wfe_freq_change_iram_base;
 u32 *wait_for_ddr_freq_update;
@@ -399,7 +402,7 @@ int update_ddr_freq_imx6q(int ddr_rate)
 
 	return 0;
 }
-
+#ifdef CONFIG_SOC_IMX6SX
 int init_mmdc_ddr3_settings_imx6sx(struct platform_device *busfreq_pdev)
 {
 	int i;
@@ -481,6 +484,7 @@ int init_mmdc_ddr3_settings_imx6sx(struct platform_device *busfreq_pdev)
 
 	return 0;
 }
+#endif
 
 int init_mmdc_ddr3_settings_imx6q(struct platform_device *busfreq_pdev)
 {

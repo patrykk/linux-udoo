@@ -34,6 +34,13 @@
 #define GPC_PGC_CPU_PDNSCR	0x2a8
 #define GPC_PGC_SW2ISO_SHIFT	0x8
 #define GPC_PGC_SW_SHIFT	0x0
+#define GPC_M4_LPSR             0x2c
+#define GPC_M4_LPSR_M4_SLEEPING_SHIFT   4
+#define GPC_M4_LPSR_M4_SLEEPING_MASK    0x1
+#define GPC_M4_LPSR_M4_SLEEP_HOLD_REQ_MASK      0x1
+#define GPC_M4_LPSR_M4_SLEEP_HOLD_REQ_SHIFT     0
+#define GPC_M4_LPSR_M4_SLEEP_HOLD_ACK_MASK      0x1
+#define GPC_M4_LPSR_M4_SLEEP_HOLD_ACK_SHIFT     1
 
 #define IMR_NUM			4
 #define GPC_MAX_IRQS		(IMR_NUM * 32)
@@ -167,6 +174,16 @@ static void imx_gpc_irq_mask(struct irq_data *d)
 {
 	imx_gpc_hwirq_mask(d->hwirq);
 	irq_chip_mask_parent(d);
+}
+
+unsigned int imx_gpc_is_m4_sleeping(void)
+{
+        if (readl_relaxed(gpc_base + GPC_M4_LPSR) &
+                (GPC_M4_LPSR_M4_SLEEPING_MASK <<
+                GPC_M4_LPSR_M4_SLEEPING_SHIFT))
+                return 1;
+
+        return 0;
 }
 
 static struct irq_chip imx_gpc_chip = {
