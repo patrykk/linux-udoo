@@ -15,12 +15,27 @@ config SH_MIPI_DSI
 config SH_LCD_MIPI_DSI
 	bool
 
+config FB_MXS
+        tristate "MXS LCD framebuffer support"
+        depends on FB && ARCH_MXS
+        select FB_CFB_FILLRECT
+        select FB_CFB_COPYAREA
+        select FB_CFB_IMAGEBLIT
+        select FB_MODE_HELPERS
+        select VIDEOMODE_HELPERS
+        help
+          Framebuffer support for the MXS SoC.
+
 source "drivers/char/agp/Kconfig"
 
 source "drivers/gpu/vga/Kconfig"
 
 source "drivers/gpu/host1x/Kconfig"
 source "drivers/gpu/ipu-v3/Kconfig"
+
+if ARCH_MXC
+source "drivers/video/mxc/Kconfig"
+endif
 
 menu "Direct Rendering Manager"
 source "drivers/gpu/drm/Kconfig"
