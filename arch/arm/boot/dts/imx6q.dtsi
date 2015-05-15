@@ -14,6 +14,7 @@
 
 / {
 	aliases {
+		ipu1 = &ipu2;
 		spi4 = &ecspi5;
 	};
 
@@ -47,9 +48,12 @@
 				 <&clks IMX6QDL_CLK_PLL2_PFD2_396M>,
 				 <&clks IMX6QDL_CLK_STEP>,
 				 <&clks IMX6QDL_CLK_PLL1_SW>,
-				 <&clks IMX6QDL_CLK_PLL1_SYS>;
+				 <&clks IMX6QDL_CLK_PLL1_SYS>,
+				 <&clks IMX6QDL_PLL1_BYPASS>,
+                                 <&clks IMX6QDL_CLK_PLL1>,
+                                 <&clks IMX6QDL_PLL1_BYPASS_SRC> ;
 			clock-names = "arm", "pll2_pfd2_396m", "step",
-				      "pll1_sw", "pll1_sys";
+				      "pll1_sw", "pll1_sys", "pll1_bypass", "pll1", "pll1_bypass_src";
 			arm-supply = <&reg_arm>;
 			pu-supply = <&reg_pu>;
 			soc-supply = <&reg_soc>;
@@ -78,6 +82,50 @@
 	};
 
 	soc {
+                busfreq {
+                        compatible = "fsl,imx6_busfreq";
+                        clocks = <&clks 171>, <&clks 6>, <&clks 11>, <&clks 104>, <&clks 172>, <&clks 58>,
+                                <&clks 18>, <&clks 60>, <&clks 20>, <&clks 3>;
+                        clock-names = "pll2_bus", "pll2_pfd2_396m", "pll2_198m", "arm", "pll3_usb_otg", "periph",
+                                "periph_pre", "periph_clk2", "periph_clk2_sel", "osc";
+                        interrupts = <0 107 0x04>, <0 112 0x4>, <0 113 0x4>, <0 114 0x4>;
+                        interrupt-names = "irq_busfreq_0", "irq_busfreq_1", "irq_busfreq_2", "irq_busfreq_3";
+                        fsl,max_ddr_freq = <528000000>;
+                };
+
+                gpu@00130000 {
+                        compatible = "fsl,imx6q-gpu";
+                        reg = <0x00130000 0x4000>, <0x00134000 0x4000>,
+                              <0x02204000 0x4000>, <0x0 0x0>;
+                        reg-names = "iobase_3d", "iobase_2d",
+                                    "iobase_vg", "phys_baseaddr";
+                        interrupts = <0 9 IRQ_TYPE_LEVEL_HIGH>,
+                                     <0 10 IRQ_TYPE_LEVEL_HIGH>,
+                                     <0 11 IRQ_TYPE_LEVEL_HIGH>;
+                        interrupt-names = "irq_3d", "irq_2d", "irq_vg";
+                        clocks = <&clks IMX6QDL_CLK_GPU2D_AXI>, <&clks IMX6QDL_CLK_OPENVG_AXI>,
+                                 <&clks IMX6QDL_CLK_GPU3D_AXI>, <&clks IMX6QDL_CLK_GPU2D_CORE>,
+                                 <&clks IMX6QDL_CLK_GPU3D_CORE>, <&clks IMX6QDL_CLK_GPU3D_SHADER>;
+                        clock-names = "gpu2d_axi_clk", "openvg_axi_clk",
+                                      "gpu3d_axi_clk", "gpu2d_clk",
+                                      "gpu3d_clk", "gpu3d_shader_clk";
+                        resets = <&src 0>, <&src 3>, <&src 3>;
+                        reset-names = "gpu3d", "gpu2d", "gpuvg";
+                        power-domains = <&gpc 1>;
+                };
+
+                ocrams: sram@00900000 {
+                        compatible = "fsl,lpm-sram";
+                        reg = <0x00900000 0x4000>;
+                        clocks = <&clks IMX6QDL_CLK_OCRAM>;
+                };
+
+                ocrams_ddr: sram@00904000 {
+                        compatible = "fsl,ddr-lpm-sram";
+                        reg = <0x00904000 0x1000>;
+                        clocks = <&clks IMX6QDL_CLK_OCRAM>;
+                };
+
 		ocram: sram@00900000 {
 			compatible = "mmio-sram";
 			reg = <0x00900000 0x40000>;
@@ -142,6 +190,18 @@
 			};
 		};
 
+                aips-bus@02100000 { /* AIPS2 */
+                        mipi_dsi: mipi@021e0000 {
+                                compatible = "fsl,imx6q-mipi-dsi";
+                                reg = <0x021e0000 0x4000>;
+                                interrupts = <0 102 0x04>;
+                                gpr = <&gpr>;
+                                clocks = <&clks IMX6QDL_CLK_HSI_TX>, <&clks IMX6QDL_CLK_VIDEO_27M>;
+                                clock-names = "mipi_pllref_clk", "mipi_cfg_clk";
+                                status = "disabled";
+                        };
+                };
+
 		sata: sata@02200000 {
 			compatible = "fsl,imx6q-ahci";
 			reg = <0x02200000 0x4000>;
@@ -154,18 +214,21 @@
 		};
 
 		ipu2: ipu@02800000 {
-			#address-cells = <1>;
-			#size-cells = <0>;
 			compatible = "fsl,imx6q-ipu";
 			reg = <0x02800000 0x400000>;
 			interrupts = <0 8 IRQ_TYPE_LEVEL_HIGH>,
 				     <0 7 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clks IMX6QDL_CLK_IPU2>,
-				 <&clks IMX6QDL_CLK_IPU2_DI0>,
-				 <&clks IMX6QDL_CLK_IPU2_DI1>;
-			clock-names = "bus", "di0", "di1";
+				 <&clks IMX6QDL_CLK_IPU2_DI0>, <&clks IMX6QDL_CLK_IPU2_DI1>,
+				 <&clks IMX6QDL_CLK_IPU2_DI0_SEL>, <&clks IMX6QDL_CLK_IPU2_DI1_SEL>,
+				 <&clks IMX6QDL_CLK_LDB_DI0>, <&clks IMX6QDL_CLK_LDB_DI1>;
+			clock-names = "bus", 
+				      "di0", "di1",
+                                      "di0_sel", "di1_sel",
+                                      "ldb_di0", "ldb_di1";
 			resets = <&src 4>;
-
+			bypass_reset = <0>;
+/*
 			ipu2_csi0: port@0 {
 				reg = <0>;
 			};
@@ -176,7 +239,7 @@
 
 			ipu2_di0: port@2 {
 				#address-cells = <1>;
-				#size-cells = <0>;
+				:q#size-cells = <0>;
 				reg = <2>;
 
 				ipu2_di0_disp0: endpoint@0 {
@@ -217,16 +280,35 @@
 				ipu2_di1_lvds1: endpoint@4 {
 					remote-endpoint = <&lvds1_mux_3>;
 				};
-			};
+			};*/
 		};
 	};
 
-	display-subsystem {
+/*	display-subsystem {
 		compatible = "fsl,imx-display-subsystem";
 		ports = <&ipu1_di0>, <&ipu1_di1>, <&ipu2_di0>, <&ipu2_di1>;
-	};
+	};*/
 };
+/*
+&ldb {
+        compatible = "fsl,imx6q-ldb", "fsl,imx53-ldb";
 
+        clocks = <&clks IMX6QDL_CLK_LDB_DI0>, <&clks IMX6QDL_CLK_LDB_DI1>,
+                 <&clks IMX6QDL_CLK_IPU1_DI0_SEL>, <&clks IMX6QDL_CLK_IPU1_DI1_SEL>,
+                 <&clks IMX6QDL_CLK_IPU2_DI0_SEL>, <&clks IMX6QDL_CLK_IPU2_DI1_SEL>,
+                 <&clks IMX6QDL_CLK_LDB_DI0_DIV_3_5>, <&clks IMX6QDL_CLK_LDB_DI1_DIV_3_5>,
+                 <&clks IMX6QDL_CLK_LDB_DI0_DIV_7>, <&clks IMX6QDL_CLK_LDB_DI1_DIV_7>,
+                 <&clks IMX6QDL_CLK_LDB_DI0_DIV_SEL>, <&clks IMX6QDL_CLK_LDB_DI1_DIV_SEL>;
+        clock-names = "ldb_di0", "ldb_di1",
+                      "di0_sel", "di1_sel",
+                      "di2_sel", "di3_sel",
+                      "ldb_di0_div_3_5", "ldb_di1_div_3_5",
+                      "ldb_di0_div_7", "ldb_di1_div_7",
+                      "ldb_di0_div_sel", "ldb_di1_div_sel";
+};*/
+
+                               
+/*
 &hdmi {
 	compatible = "fsl,imx6q-hdmi";
 
@@ -292,8 +374,8 @@
 		};
 	};
 };
-
-&mipi_dsi {
+*/
+/*&mipi_dsi {
 	port@2 {
 		reg = <2>;
 
@@ -309,8 +391,8 @@
 			remote-endpoint = <&ipu2_di1_mipi>;
 		};
 	};
-};
-
+};*/
+/*
 &vpu {
 	compatible = "fsl,imx6q-vpu", "cnm,coda960";
-};
+};*/

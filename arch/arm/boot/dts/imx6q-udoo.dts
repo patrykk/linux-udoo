@@ -14,7 +14,7 @@
 
 / {
 	model = "Udoo i.MX6 Quad Board";
-	compatible = "udoo,imx6q-udoo", "fsl,imx6q";
+	compatible = "udoo,imx6q-udoo", "fsl,imx6q-udoo", "fsl,imx6q";
 };
 
 &sata {
