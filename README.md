@@ -41,16 +41,16 @@ Versions
 --------
 
 This has been tested with:
- - uboot-udoo-quad 2014.10 
+ - uboot-udoo-quad 2015.1 
  - libcec-imx6 13.20141201
  - xf86-video-imx-viv 3.10.53_1.1.0 (for lxdm need some patch)
- - gst-imx 0.10.0
- - imx-lib 3.10.53_1.1.0
- - imx-vpu 5.4.27-1
- - firmware-imx 3.10.31_1.1.0
- - imx-gpu-viv-g2d 5.0.11.p4.1 (previous name: gpu-viv-g2d) 
- - imx-gpu-viv-(x11|fb) 5.0.11.p4.1 (previous name: gpu-viv-bin-mx6q)
- - libfslvpuwrap 1.0.57
+ - gst-imx 0.10.1.r7
+ - imx-lib 3.14.28_1.0.0
+ - imx-vpu 5.4.28-1 (3.14.28)
+ - firmware-imx 3.14.28_1.0.0
+ - imx-gpu-viv-g2d 5.0.11.p4.4 (previous name: gpu-viv-g2d) 
+ - imx-gpu-viv-(x11|fb) 5.0.11.p4.4 (previous name: gpu-viv-bin-mx6q)
+ - libfslvpuwrap 1.0.58 (3.14.28)
  - libimxvpuapi
  - Xorg server 1.16.x
  - libcec-imx6 13.20141201
@@ -82,11 +82,11 @@ Work:
  - Arduino with Udoo patch (export gpio 0 and 117: "echo 0 > /sys/class/gpio/export; echo 117 > /sys/class/gpio/export")
  - XBMC 
  - gstream vpu
+ - freescale camera (no tested)
 
 
 Doesn't Work
 
  - CAAM (very unstable)
  - PCIe
- - freescale camera
 
