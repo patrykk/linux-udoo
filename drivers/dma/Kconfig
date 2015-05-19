@@ -173,6 +173,19 @@ config PXA_DMA
 	  16 to 32 channels for peripheral to memory or memory to memory
 	  transfers.
 
+config MXC_PXP_V2
+        bool "MXC PxP V2 support"
+        depends on ARM
+        select DMA_ENGINE
+        help
+          Support the PxP (Pixel Pipeline) on i.MX6 DualLite and i.MX6 SoloLite.
+          If unsure, select N.
+
+config MXC_PXP_CLIENT_DEVICE
+        bool "MXC PxP Client Device"
+        default y
+        depends on MXC_PXP_V2
+
 config TXX9_DMAC
 	tristate "Toshiba TXx9 SoC DMA support"
 	depends on MACH_TX49XX || MACH_TX39XX
