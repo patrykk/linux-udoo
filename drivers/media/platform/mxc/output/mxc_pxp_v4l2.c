@@ -443,6 +443,8 @@ static int pxp_s_output(struct file *file, void *fh,
 			unsigned int i)
 {
 	struct pxps *pxp = video_get_drvdata(video_devdata(file));
+	
+	/* v4l2_pix_format have  flags, ycbcr_enc and quantization. fb.fmt (fmt struct from v4l2_framebuffer) doesn't. */
 	struct v4l2_pix_format *fmt = &pxp->fb.fmt;
 	u32 size;
 	int ret, bpp;
