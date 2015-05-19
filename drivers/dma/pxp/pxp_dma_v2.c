@@ -1691,7 +1691,7 @@ static int pxp_probe(struct platform_device *pdev)
 	spin_lock_init(&pxp->lock);
 	mutex_init(&pxp->clk_mutex);
 
-	pxp->base = devm_request_and_ioremap(&pdev->dev, res);
+	pxp->base = devm_ioremap_resource(&pdev->dev, res);
 	if (pxp->base == NULL) {
 		dev_err(&pdev->dev, "Couldn't ioremap regs\n");
 		err = -ENODEV;
