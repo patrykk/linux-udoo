@@ -189,6 +189,28 @@ enum dma_ctrl_flags {
 };
 
 /**
+ * enum dma_ctrl_cmd - DMA operations that can optionally be exercised
+ * on a running channel.
+ * @DMA_TERMINATE_ALL: terminate all ongoing transfers
+ * @DMA_PAUSE: pause ongoing transfers
+ * @DMA_RESUME: resume paused transfer
+ * @DMA_SLAVE_CONFIG: this command is only implemented by DMA controllers
+ * that need to runtime reconfigure the slave channels (as opposed to passing
+ * configuration data in statically from the platform). An additional
+ * argument of struct dma_slave_config must be passed in with this
+ * command.
+ * @FSLDMA_EXTERNAL_START: this command will put the Freescale DMA controller
+ * into external start mode.
+ */
+enum dma_ctrl_cmd {
+        DMA_TERMINATE_ALL,
+        DMA_PAUSE,
+        DMA_RESUME,
+        DMA_SLAVE_CONFIG,
+        FSLDMA_EXTERNAL_START,
+};
+
+/**
  * enum sum_check_bits - bit position of pq_check_flags
  */
 enum sum_check_bits {
