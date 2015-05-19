@@ -954,9 +954,10 @@ static int pxp_querycap(struct file *file, void *fh,
 
 	cap->version = (PXP_DRIVER_MAJOR << 8) + PXP_DRIVER_MINOR;
 
-	cap->capabilities = V4L2_CAP_VIDEO_OUTPUT |
+	cap->device_caps = V4L2_CAP_VIDEO_OUTPUT | 
 				V4L2_CAP_VIDEO_OUTPUT_OVERLAY |
 				V4L2_CAP_STREAMING;
+	cap->capabilities = cap->device_caps | V4L2_CAP_DEVICE_CAPS;
 
 	return 0;
 }
