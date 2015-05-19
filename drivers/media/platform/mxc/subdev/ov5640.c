@@ -29,6 +29,7 @@
 #include <linux/pinctrl/consumer.h>
 #include <linux/regulator/consumer.h>
 #include <linux/v4l2-mediabus.h>
+#include <linux/media-bus-format.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-ctrls.h>
 
@@ -71,7 +72,7 @@ static int ov5640_framerates[] = {
 };
 
 struct ov5640_datafmt {
-	enum v4l2_mbus_pixelcode	code;
+	u32 code;
 	enum v4l2_colorspace		colorspace;
 };
 
@@ -614,7 +615,7 @@ static struct i2c_driver ov5640_i2c_driver = {
 };
 
 static const struct ov5640_datafmt ov5640_colour_fmts[] = {
-	{V4L2_MBUS_FMT_YUYV8_2X8, V4L2_COLORSPACE_JPEG},
+	{MEDIA_BUS_FMT_YUYV8_2X8, V4L2_COLORSPACE_JPEG},
 };
 
 static struct ov5640 *to_ov5640(const struct i2c_client *client)
@@ -624,7 +625,7 @@ static struct ov5640 *to_ov5640(const struct i2c_client *client)
 
 /* Find a data format by a pixel code in an array */
 static const struct ov5640_datafmt
-			*ov5640_find_datafmt(enum v4l2_mbus_pixelcode code)
+			*ov5640_find_datafmt(u32 code)
 {
 	int i;
 
@@ -1613,7 +1614,7 @@ static int ov5640_g_fmt(struct v4l2_subdev *sd,
 }
 
 static int ov5640_enum_fmt(struct v4l2_subdev *sd, unsigned int index,
-			   enum v4l2_mbus_pixelcode *code)
+			   u32 *code)
 {
 	if (index >= ARRAY_SIZE(ov5640_colour_fmts))
 		return -EINVAL;
