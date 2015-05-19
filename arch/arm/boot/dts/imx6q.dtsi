@@ -214,18 +214,21 @@
 		};
 
 		ipu2: ipu@02800000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
 			compatible = "fsl,imx6q-ipu";
 			reg = <0x02800000 0x400000>;
 			interrupts = <0 8 IRQ_TYPE_LEVEL_HIGH>,
 				     <0 7 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&clks IMX6QDL_CLK_IPU2>,
-				 <&clks IMX6QDL_CLK_IPU2_DI0>, <&clks IMX6QDL_CLK_IPU2_DI1>,
-				 <&clks IMX6QDL_CLK_IPU2_DI0_SEL>, <&clks IMX6QDL_CLK_IPU2_DI1_SEL>,
-				 <&clks IMX6QDL_CLK_LDB_DI0>, <&clks IMX6QDL_CLK_LDB_DI1>;
-			clock-names = "bus", 
-				      "di0", "di1",
-                                      "di0_sel", "di1_sel",
-                                      "ldb_di0", "ldb_di1";
+                        clocks = <&clks IMX6QDL_CLK_IPU2>,
+                                 <&clks IMX6QDL_CLK_IPU2_DI0>,
+				 <&clks IMX6QDL_CLK_IPU2_DI1>,
+                                 <&clks IMX6QDL_CLK_IPU2_DI0_SEL>, <&clks IMX6QDL_CLK_IPU2_DI1_SEL>,
+                                 <&clks IMX6QDL_CLK_LDB_DI0>, <&clks IMX6QDL_CLK_LDB_DI1>;
+                        clock-names = "bus", "di0", "di1",
+					"di0_sel", "di1_sel",
+					"ldb_di0", "ldb_di1";
+
 			resets = <&src 4>;
 			bypass_reset = <0>;
 /*
@@ -289,7 +292,27 @@
 		ports = <&ipu1_di0>, <&ipu1_di1>, <&ipu2_di0>, <&ipu2_di1>;
 	};*/
 };
-/*
+
+&ecspi1 {
+        dmas = <&sdma 3 7 1>, <&sdma 4 7 2>;
+        dma-names = "rx", "tx";
+};
+
+&ecspi2 {
+        dmas = <&sdma 5 7 1>, <&sdma 6 7 2>;
+        dma-names = "rx", "tx";
+};
+
+&ecspi3 {
+        dmas = <&sdma 7 7 1>, <&sdma 8 7 2>;
+        dma-names = "rx", "tx";
+};
+
+&ecspi4 {
+        dmas = <&sdma 9 7 1>, <&sdma 10 7 2>;
+        dma-names = "rx", "tx";
+};
+
 &ldb {
         compatible = "fsl,imx6q-ldb", "fsl,imx53-ldb";
 
@@ -305,7 +328,7 @@
                       "ldb_di0_div_3_5", "ldb_di1_div_3_5",
                       "ldb_di0_div_7", "ldb_di1_div_7",
                       "ldb_di0_div_sel", "ldb_di1_div_sel";
-};*/
+};
 
                                
 /*
@@ -374,8 +397,8 @@
 		};
 	};
 };
-*/
-/*&mipi_dsi {
+
+&mipi_dsi {
 	port@2 {
 		reg = <2>;
 
@@ -391,8 +414,8 @@
 			remote-endpoint = <&ipu2_di1_mipi>;
 		};
 	};
-};*/
-/*
+};
+
 &vpu {
 	compatible = "fsl,imx6q-vpu", "cnm,coda960";
 };*/
