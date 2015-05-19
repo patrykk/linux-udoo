@@ -99,16 +99,13 @@
 			};
 		};
 	};
-
+/*
 	display-subsystem {
 		compatible = "fsl,imx-display-subsystem";
 		ports = <&ipu1_di0>, <&ipu1_di1>;
-	};
+	};*/
 };
 
-&hdmi {
-	compatible = "fsl,imx6dl-hdmi";
-};
 
 /*&ldb {
 	clocks = <&clks IMX6QDL_CLK_LDB_DI0_SEL>, <&clks IMX6QDL_CLK_LDB_DI1_SEL>,
