@@ -28,7 +28,7 @@
 #include <linux/of_gpio.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/regulator/consumer.h>
-#include <media/v4l2-chip-ident.h>
+//#include <media/v4l2-chip-ident.h>
 #include "v4l2-int-device.h"
 #include "mxc_v4l2_capture.h"
 
@@ -1666,7 +1666,7 @@ static int ioctl_enum_frameintervals(struct v4l2_int_device *s,
  * @id: pointer to int
  *
  * Return 0.
- */
+ *
 static int ioctl_g_chip_ident(struct v4l2_int_device *s, int *id)
 {
 	((struct v4l2_dbg_chip_ident *)id)->match.type =
@@ -1674,7 +1674,7 @@ static int ioctl_g_chip_ident(struct v4l2_int_device *s, int *id)
 	strcpy(((struct v4l2_dbg_chip_ident *)id)->match.name, "ov5640_camera");
 
 	return 0;
-}
+}*/
 
 /*!
  * ioctl_init - V4L2 sensor interface handler for VIDIOC_INT_INIT
@@ -1786,8 +1786,8 @@ static struct v4l2_int_ioctl_desc ov5640_ioctl_desc[] = {
 	  (v4l2_int_ioctl_func *)ioctl_enum_framesizes },
 	{ vidioc_int_enum_frameintervals_num,
 	  (v4l2_int_ioctl_func *)ioctl_enum_frameintervals },
-	{ vidioc_int_g_chip_ident_num,
-	  (v4l2_int_ioctl_func *)ioctl_g_chip_ident },
+/*	{ vidioc_int_g_chip_ident_num,
+	  (v4l2_int_ioctl_func *)ioctl_g_chip_ident },*/
 };
 
 static struct v4l2_int_slave ov5640_slave = {
