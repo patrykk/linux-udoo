@@ -1,7 +1,7 @@
 /*
  * CAAM/SEC 4.x functions for using scatterlists in caam driver
  *
- * Copyright 2008-2011 Freescale Semiconductor, Inc.
+ * Copyright 2008-2015 Freescale Semiconductor, Inc.
  *
  */
 
@@ -37,7 +37,7 @@ sg_to_sec4_sg(struct scatterlist *sg, int sg_count,
 		dma_to_sec4_sg_one(sec4_sg_ptr, sg_dma_address(sg),
 				   sg_dma_len(sg), offset);
 		sec4_sg_ptr++;
-		sg = sg_next(sg);
+		sg = scatterwalk_sg_next(sg);
 		sg_count--;
 	}
 	return sec4_sg_ptr - 1;
@@ -67,7 +67,7 @@ static inline int __sg_count(struct scatterlist *sg_list, int nbytes,
 		nbytes -= sg->length;
 		if (!sg_is_last(sg) && (sg + 1)->length == 0)
 			*chained = true;
-		sg = sg_next(sg);
+		sg = scatterwalk_sg_next(sg);
 	}
 
 	return sg_nents;
@@ -91,13 +91,22 @@ static int dma_map_sg_chained(struct device *dev, struct scatterlist *sg,
 {
 	if (unlikely(chained)) {
 		int i;
+	struct scatterlist *tsg = sg;
+
+	/* We use a local copy of the sg pointer to avoid moving the
+	 * head of the list pointed to by sg as we wall the list.
+	 */
 		for (i = 0; i < nents; i++) {
-			dma_map_sg(dev, sg, 1, dir);
-			sg = sg_next(sg);
+			dma_map_sg(dev, tsg, 1, dir);
+			tsg = scatterwalk_sg_next(tsg);
 		}
 	} else {
 		dma_map_sg(dev, sg, nents, dir);
 	}
+
+	if ((dir == DMA_TO_DEVICE) || (dir == DMA_BIDIRECTIONAL))
+		dma_sync_sg_for_device(dev, sg, nents, dir);
+
 	return nents;
 }
 
@@ -105,11 +114,14 @@ static int dma_unmap_sg_chained(struct device *dev, struct scatterlist *sg,
 				unsigned int nents, enum dma_data_direction dir,
 				bool chained)
 {
+	if ((dir == DMA_FROM_DEVICE) || (dir == DMA_BIDIRECTIONAL))
+		dma_sync_sg_for_cpu(dev, sg, nents, dir);
+
 	if (unlikely(chained)) {
 		int i;
 		for (i = 0; i < nents; i++) {
 			dma_unmap_sg(dev, sg, 1, dir);
-			sg = sg_next(sg);
+			sg = scatterwalk_sg_next(sg);
 		}
 	} else {
 		dma_unmap_sg(dev, sg, nents, dir);
