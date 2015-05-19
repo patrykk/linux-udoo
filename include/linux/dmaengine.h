@@ -786,6 +786,8 @@ struct dma_device {
 		struct dma_chan *chan, dma_addr_t dst, u64 data,
 		unsigned long flags);
 
+	int (*device_control)(struct dma_chan *chan, enum dma_ctrl_cmd cmd,
+                unsigned long arg);
 	int (*device_config)(struct dma_chan *chan,
 			     struct dma_slave_config *config);
 	int (*device_pause)(struct dma_chan *chan);
