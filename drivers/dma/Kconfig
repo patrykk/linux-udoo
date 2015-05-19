@@ -251,6 +251,19 @@ config INTEL_IOATDMA
 
 	  If unsure, say N.
 
+config MXC_PXP_V2
+        bool "MXC PxP V2 support"
+        depends on ARM
+        select DMA_ENGINE
+        help
+          Support the PxP (Pixel Pipeline) on i.MX6 DualLite and i.MX6 SoloLite.
+          If unsure, select N.
+
+config MXC_PXP_CLIENT_DEVICE
+        bool "MXC PxP Client Device"
+        default y
+        depends on MXC_PXP_V2
+
 config INTEL_IOP_ADMA
 	tristate "Intel IOP ADMA support"
 	depends on ARCH_IOP32X || ARCH_IOP33X || ARCH_IOP13XX
