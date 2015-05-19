@@ -493,13 +493,13 @@ static int vadc_querystd(struct v4l2_subdev *sd, v4l2_std_id *std)
 }
 
 static int vadc_enum_mbus_fmt(struct v4l2_subdev *sd, unsigned index,
-					enum v4l2_mbus_pixelcode *code)
+					u32 *code)
 {
 	/* support only one format  */
 	if (index >= 1)
 		return -EINVAL;
 
-	*code = V4L2_MBUS_FMT_AYUV8_1X32;
+	*code = MEDIA_BUS_FMT_AYUV8_1X32;
 	return 0;
 }
 
@@ -508,7 +508,7 @@ static int vadc_mbus_fmt(struct v4l2_subdev *sd,
 {
 	struct vadc_state *state = to_state(sd);
 
-	fmt->code = V4L2_MBUS_FMT_AYUV8_1X32;
+	fmt->code = MEDIA_BUS_FMT_AYUV8_1X32;
 	fmt->colorspace = V4L2_COLORSPACE_SMPTE170M;
 	fmt->field = V4L2_FIELD_INTERLACED;
 	fmt->width = 720;
