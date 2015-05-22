@@ -175,6 +175,13 @@
 		compatible = "fsl,mxc_v4l2_output";
 		status = "okay";
 	};
+	
+	poweroff {
+		compatible = "udoo,poweroff";
+		sam3x_rst_gpio = <&gpio1 0 0>;
+		pwr_5v_gpio = <&gpio2 4 0>;
+	};
+
 };
 
 &audmux {
@@ -200,7 +207,7 @@
         status = "okay";
 };
 
-&hdmi_core {
+&hdmi_core { 
 	ipu_id = <0>;
 	disp_id = <0>;
 	status = "okay";
@@ -582,11 +589,6 @@
         v_channel = <0>;
         lanes = <1>;
 };
-
-&snvs_poweroff {
-	status = "okay";
-};
-
 
 &ssi1 {
         pinctrl-names = "default", "ac97-running", "ac97-reset", "ac97-warm-reset";
