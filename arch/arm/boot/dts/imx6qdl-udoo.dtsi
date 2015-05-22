@@ -583,6 +583,11 @@
         lanes = <1>;
 };
 
+&snvs_poweroff {
+	status = "okay";
+};
+
+
 &ssi1 {
         pinctrl-names = "default", "ac97-running", "ac97-reset", "ac97-warm-reset";
         pinctrl-0 = <&pinctrl_audmux>;
