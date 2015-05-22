@@ -149,6 +149,12 @@
 		compatible = "fsl,mxc_v4l2_output";
 		status = "okay";
 	};
+	
+	poweroff {
+		compatible = "udoo,poweroff";
+		sam3x_rst_gpio = <&gpio1 0 0>;
+		pwr_5v_gpio = <&gpio2 4 0>;
+	};
 };
 
 &audmux {
@@ -543,10 +549,6 @@
         csi_id = <1>;
         v_channel = <0>;
         lanes = <1>;
-};
-
-&snvs_poweroff {
-	status = "okay";
 };
 
 &spdif {
