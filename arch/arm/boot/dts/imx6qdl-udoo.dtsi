@@ -134,8 +134,8 @@
                         "DMICDAT", "DMIC";
                 mux-int-port = <1>;
                 mux-ext-port = <6>;
-		hp-det-gpios = <&gpio7 8 1>;
-		mic-det-gpios = <&gpio1 9 1>;
+		//hp-det-gpios = <&gpio7 8 1>;
+		//mic-det-gpios = <&gpio1 9 1>;
         };
 
 	sound-hdmi {
@@ -291,8 +291,6 @@
 				MX6QDL_PAD_EIM_A19__GPIO2_IO19    0x80000000  /* writeprotect spi*/
 				MX6QDL_PAD_GPIO_3__GPIO1_IO03     0x30b1      /* arduino pinout  */
 
-				MX6QDL_PAD_GPIO_0__CCM_CLKO1    0x030b0
-
 
 				//MX6QDL_PAD_GPIO_1__GPIO1_IO01     0x80000000
 				//MX6QDL_PAD_GPIO_7__GPIO1_IO07     0x80000000 //can
@@ -427,8 +425,8 @@
 
 		pinctrl_uart4: uart4grp {
 			fsl,pins = <				
-				MX6QDL_PAD_KEY_COL0__UART4_TX_DATA 0x1b0b1
-				MX6QDL_PAD_KEY_ROW0__UART4_RX_DATA 0x1b0b1
+				MX6QDL_PAD_KEY_COL0__UART4_TX_DATA	0x1b0b1
+				MX6QDL_PAD_KEY_ROW0__UART4_RX_DATA	0x1b0b1
 			>;
 		};
 		
@@ -497,7 +495,7 @@
 
 		ac97link_warm_reset: audmuxgrp_warmreset {
                         fsl,pins = <
-                                MX6QDL_PAD_EIM_EB2__GPIO2_IO30    0x80000000  /* audio reset    */
+                                MX6QDL_PAD_EIM_EB2__GPIO2_IO30    0x80000000 
                         >;
                 };
 
