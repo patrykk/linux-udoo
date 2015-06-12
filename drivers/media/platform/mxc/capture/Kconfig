@@ -6,6 +6,7 @@ menu "MXC Camera/V4L2 PRP Features support"
 config VIDEO_MXC_IPU_CAMERA
 	bool
 	select VIDEO_V4L2_MXC_INT_DEVICE
+        select MXC_IPU_DEVICE_QUEUE_SDC
 	depends on VIDEO_MXC_CAPTURE && MXC_IPU
 	default y
 
