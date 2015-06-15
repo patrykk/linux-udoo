@@ -44,6 +44,7 @@
 		spi1 = &ecspi2;
 		spi2 = &ecspi3;
 		spi3 = &ecspi4;
+		ssi0 = &ssi1;
 		usbphy0 = &usbphy1;
 		usbphy1 = &usbphy2;
 	};
