@@ -78,7 +78,7 @@ Work:
  - GPIO - (check documentation for pins scheme and execute f.ex. "echo 40 > /sys/class/gpio/export" for gpio40)
  - PWM (for inverted polarity need small patch) 
  - SATA - on quad
- - CAN (xcvr problem)
+ - CAN 
  - Arduino with Udoo patch (export gpio 0 and 117: "echo 0 > /sys/class/gpio/export; echo 117 > /sys/class/gpio/export")
  - XBMC 
  - gstream vpu
