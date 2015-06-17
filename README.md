@@ -65,7 +65,8 @@ Work:
  - wifi (stable)
  - VPU
  - GPU 
- - HDMI video (kernel commands for stable HDMI: mem=1024M video=mxcfb0:dev=hdmi,1920x1080M@60,bpp=32)
+ - HDMI video (kernel commands for stable HDMI: video=mxcfb0:dev=hdmi,1920x1080M@60,bpp=32)
+ - LVDS support (kernel commands : video=mxcfb1:dev=ldb,LDB-WVGA,if=RGB666,bpp=32)
  - Xorg driver with xrandr
  - OpenCL
  - HDMI audio
