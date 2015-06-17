@@ -99,6 +99,33 @@
                         regulator-max-microvolt = <2500000>;
                         regulator-always-on;
                 };
+
+		reg_lcd0_pwr: regulator@6 {
+			compatible = "regulator-fixed";
+			reg = <6>;
+			regulator-name = "LCD0 POWER";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpio1 2 0>;
+			enable-active-high;
+			regulator-boot-on;
+			regulator-always-on;
+			status = "disabled";
+		};
+		
+		reg_lcd0_backlight: regulator@7 {
+			compatible = "regulator-fixed";
+			reg = <7>;
+			regulator-name = "LCD0 BACKLIGHT";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpio1 4 0>;
+			enable-active-high;
+			regulator-boot-on;
+			regulator-always-on;
+			status = "disabled";
+		};
+
 	};
 
 	mxcfb1: fb@0 {
@@ -170,7 +197,6 @@
 };
 
 &audmux {
-        pinctrl-names = "default";
         status = "okay";
 };
 
@@ -201,6 +227,18 @@
 	fsl,phy_reg_vlev = <0x0294>;
 	fsl,phy_reg_cksymtx = <0x800d>;
 	status = "okay";
+};
+
+&ldb { // LVDS display bridge
+	status = "disabled";
+	primary;
+	lvds-channel@0 {
+		reg = <0>;
+		fsl,data-mapping = "spwg";
+		status = "disabled";
+		primary;
+		crtc = "ipu1-di0";
+	};
 };
 
 &i2c1 {
