@@ -35,10 +35,29 @@
 
 #define MIN_X		0x00
 #define MIN_Y		0x00
-#define MAX_X		0x31f	/* (800 - 1) */
-#define MAX_Y		0x1df	/* (480 - 1) */
+#define MAX_X		(800 - 1)
+#define MAX_Y		(480 - 1)
 #define MAX_AREA	0xff
 #define MAX_FINGERS	2
+#define SAMPLE_DELAY  20  /* msecs */
+#define REVERSE_X(x) if (reverse_x == true) { x = MAX_X - (x); } else {}
+#define REVERSE_Y(y) if (reverse_y == true) { y = MAX_Y - (y); } else {}
+
+static bool reverse_x = false;
+module_param(reverse_x, bool, 0600);
+MODULE_PARM_DESC(reverse_x, " If reverse_x is set to 1 x coordinates are reversed");
+
+static bool reverse_y = false;
+module_param(reverse_y, bool, 0600);
+MODULE_PARM_DESC(reverse_y, " If reverse_y is set to 1 y coordinates are reversed");
+
+static int offset_x = 0;
+module_param(offset_x, int, 0600);
+MODULE_PARM_DESC(offset_x, " Offset value for x axis");
+
+static int offset_y = 0;
+module_param(offset_y, int, 0600);
+MODULE_PARM_DESC(offset_y, " Offset value for y axis");
 
 struct st1232_ts_finger {
 	u16 x;
@@ -79,9 +98,13 @@ static int st1232_ts_read_data(struct st1232_ts_data *ts)
 	error = i2c_transfer(client->adapter, msg, 2);
 	if (error < 0)
 		return error;
-
+	
+	memset(finger, 0x0, sizeof(struct st1232_ts_finger) * MAX_FINGERS);
+	
 	/* get "valid" bits */
+	finger[0].is_valid  = (buf[0] & 0x07);  /* only 3 bits on st1332 */
 	finger[0].is_valid = buf[2] >> 7;
+	finger[1].is_valid  = (buf[0] & 0x07);
 	finger[1].is_valid = buf[5] >> 7;
 
 	/* get xy coordinate */
@@ -89,12 +112,18 @@ static int st1232_ts_read_data(struct st1232_ts_data *ts)
 		finger[0].x = ((buf[2] & 0x0070) << 4) | buf[3];
 		finger[0].y = ((buf[2] & 0x0007) << 8) | buf[4];
 		finger[0].t = buf[8];
+		REVERSE_X(finger[0].x)
+		REVERSE_Y(finger[0].y)
+		finger[0].x += offset_x;
+		finger[0].y += offset_y;
 	}
 
 	if (finger[1].is_valid) {
 		finger[1].x = ((buf[5] & 0x0070) << 4) | buf[6];
 		finger[1].y = ((buf[5] & 0x0007) << 8) | buf[7];
 		finger[1].t = buf[9];
+		REVERSE_X(finger[1].x)
+		REVERSE_Y(finger[1].y)
 	}
 
 	return 0;
