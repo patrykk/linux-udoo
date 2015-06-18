@@ -265,6 +265,16 @@
         pinctrl-names = "default";
         pinctrl-0 = <&pinctrl_i2c3>;
         status = "okay";
+	touchscreen: st1232@55 {
+		compatible = "sitronix,st1232";
+		reg = <0x55>;
+		interrupt-parent = <&gpio1>;
+		interrupts = <13 IRQ_TYPE_LEVEL_LOW>;
+		gpios = <&gpio1 15 0>;
+		/* udoo poweroff driver */
+		lcd_panel_on_gpio = <&gpio1 2 1>;
+		lcd_backlight_gpio = <&gpio1 4 1>;
+	};
 };
 
 &fec {
