@@ -1,0 +1,46 @@
+/*
+ * Copyright 2013 Freescale Semiconductor, Inc.
+ * Copyright 2015 Aidilab, Srl.
+ *
+ * Author: Fabio Estevam <fabio.estevam@freescale.com>
+ * Author: Ettore Chimenti <ettore.chimenti@udoo.org>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ */
+
+/dts-v1/;
+#include "imx6q.dtsi"
+#include "imx6qdl-udoo.dtsi"
+
+/ {
+	model = "Udoo i.MX6 Quad Board";
+	compatible = "udoo,imx6q-udoo", "fsl,imx6q";	
+
+	aliases {
+                mxcfb1 = &mxcfb2;
+                mxcfb2 = &mxcfb3;
+                mxcfb3 = &mxcfb4;
+        };
+        
+        regulators {
+		reg_lcd0_pwr: regulator@6 {
+			status = "okay";
+		};
+	 
+		reg_lcd0_backlight: regulator@7 {
+                        status = "okay";
+		};   
+        };
+};
+
+&ldb {
+	status = "okay";
+
+};
+
+&sata {
+	status = "okay";
+};
