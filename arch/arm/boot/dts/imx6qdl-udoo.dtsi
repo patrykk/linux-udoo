@@ -1,9 +1,10 @@
 /*
  * Copyright 2013 Freescale Semiconductor, Inc.
+ * Copyright (C) 2014 Jasbir
+ * Copyright 2015 Aidilab, Srl.
  *
  * Author: Fabio Estevam <fabio.estevam@freescale.com>
- *         
- * Copyright (C) 2014 Jasbir
+ * Author: Patryk Kowalczyk <patryk@kowalczyk,ws>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -14,6 +15,9 @@
 / {
 	aliases {
 		mxcfb0 = &mxcfb1;
+		mxcfb1 = &mxcfb2;
+		mxcfb2 = &mxcfb3;
+		mxcfb3 = &mxcfb4;
 		reg_can_xcvr = &reg_can_xcvr;
 	};
 
@@ -130,14 +134,48 @@
 
 	mxcfb1: fb@0 {
 		compatible = "fsl,mxc_sdc_fb";
-		disp_dev = "hdmi";
-		interface_pix_fmt = "RGB24";
-		mode_str ="";
+		disp_dev = "ldb";
+		interface_pix_fmt = "RGB666";
+		mode_str ="LDB-WVGA";
 		default_bpp = <32>;
 		int_clk = <0>;
 		late_init = <0>;
 		status = "disabled";
 	};
+
+        mxcfb2: fb@1 {
+                compatible = "fsl,mxc_sdc_fb";
+                disp_dev = "hdmi";
+                interface_pix_fmt = "RGB24";
+                mode_str ="1920x1080M@60";
+                default_bpp = <24>;
+                int_clk = <0>;
+                late_init = <0>;
+                status = "disabled";
+        };
+
+        mxcfb3: fb@2 {
+                compatible = "fsl,mxc_sdc_fb";
+                disp_dev = "lcd";
+                interface_pix_fmt = "RGB565";
+                mode_str ="";
+                default_bpp = <16>;
+                int_clk = <0>;
+                late_init = <0>;
+                status = "disabled";
+        };
+
+        mxcfb4: fb@3 {
+                compatible = "fsl,mxc_sdc_fb";
+                disp_dev = "ldb";
+                interface_pix_fmt = "RGB666";
+                mode_str ="";
+                default_bpp = <16>;
+                int_clk = <0>;
+                late_init = <0>;
+                status = "disabled";
+        };
+
 
 	sound-hdmi {
 		compatible = "fsl,imx6q-audio-hdmi",
@@ -218,7 +256,7 @@
 };
 
 &hdmi_core {
-	ipu_id = <0>;
+	ipu_id = <1>;
 	disp_id = <0>;
 	status = "okay";
 };
@@ -231,16 +269,84 @@
 
 &ldb { // LVDS display bridge
 	status = "disabled";
-	primary;
 	lvds-channel@0 {
-		reg = <0>;
-		fsl,data-mapping = "spwg";
-		status = "disabled";
-		primary;
 		crtc = "ipu1-di0";
+		fsl,data-width = <18>;
+		fsl,data-mapping = "spwg";
+		primary;
+		status = "okay";
+		display-timings {
+			native-mode = <&timing0>;
+			timing0: 800x480 {
+				clock-frequency = <33660000>;
+				hactive = <800>;
+				vactive = <480>;
+				hback-porch = <56>;
+				hfront-porch = <50>;
+				vback-porch = <23>;
+				vfront-porch = <20>;
+				hsync-len = <150>;
+				vsync-len = <2>;
+			};
+ 			timing1: 1366x768 {
+                        	clock-frequency = <76000000>;
+                        	hactive = <1366>;
+                        	vactive = <768>;
+                        	hback-porch = <220>;
+                        	hfront-porch = <40>;
+                        	vback-porch = <21>;
+                        	vfront-porch = <7>;
+                        	hsync-len = <60>;
+                        	vsync-len = <10>;
+                        };
+		};
 	};
-};
 
+	lvds-channel@1 {
+		crtc = "ipu1-di1";
+		fsl,data-width = <18>;
+		fsl,data-mapping = "spwg";
+		status = "okay";
+		display-timings {	
+			native-mode = <&timing1>;
+			timing2: 800x480 {
+                	        clock-frequency = <33660000>;
+                	        hactive = <800>;
+                	        vactive = <480>;
+                	        hback-porch = <56>;
+                	        hfront-porch = <50>;
+                	        vback-porch = <23>;
+                	        vfront-porch = <20>;
+                	        hsync-len = <150>;
+                	        vsync-len = <2>;
+                	};
+
+			timing3: 1366x768 {
+                                clock-frequency = <76000000>;
+                                hactive = <1366>;
+                                vactive = <768>;
+                                hback-porch = <220>;
+                                hfront-porch = <40>;
+                                vback-porch = <21>;
+                                vfront-porch = <7>;
+                                hsync-len = <60>;
+                                vsync-len = <10>;
+                        };
+		};
+
+        };
+};
+/*
+&ldb {
+	ipu_id = <1>;
+	disp_id = <0>;
+	ext_ref = <1>;
+	mode = "sep0";
+	sec_ipu_id = <1>;
+	sec_disp_id = <1>;
+	status = "okay";
+};
+*/
 &i2c1 {
 	clock-frequency = <100000>;
         pinctrl-names = "default";
@@ -578,6 +684,18 @@
 
 &mxcfb1 {
 	status = "okay";
+};
+
+&mxcfb2 {
+        status = "okay";
+};
+
+&mxcfb3 {
+        status = "okay";
+};
+
+&mxcfb4 {
+        status = "okay";
 };
 
 &can1 {
