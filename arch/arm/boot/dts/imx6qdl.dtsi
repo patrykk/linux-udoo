@@ -1288,7 +1288,7 @@
                         resets = <&src 2>;
                         bypass_reset = <0>;
 
-			ipu1_csi0: port@0 {
+/*			ipu1_csi0: port@0 {
 				reg = <0>;
 			};
 
@@ -1304,7 +1304,7 @@
 				ipu1_di0_disp0: endpoint@0 {
 				};
 
-/*				ipu1_di0_hdmi: endpoint@1 {
+				ipu1_di0_hdmi: endpoint@1 {
 					remote-endpoint = <&hdmi_mux_0>;
 				};
 
@@ -1318,7 +1318,7 @@
 
 				ipu1_di0_lvds1: endpoint@4 {
 					remote-endpoint = <&lvds1_mux_0>;
-				};*/
+				};
 			};
 
 			ipu1_di1: port@3 {
@@ -1329,7 +1329,7 @@
 				ipu1_di0_disp1: endpoint@0 {
 				};
 
-/*				ipu1_di1_hdmi: endpoint@1 {
+				ipu1_di1_hdmi: endpoint@1 {
 					remote-endpoint = <&hdmi_mux_1>;
 				};
 
@@ -1343,8 +1343,8 @@
 
 				ipu1_di1_lvds1: endpoint@4 {
 					remote-endpoint = <&lvds1_mux_1>;
-				};*/
-			};
+				};
+			};*/
 		};
 	};
 };
