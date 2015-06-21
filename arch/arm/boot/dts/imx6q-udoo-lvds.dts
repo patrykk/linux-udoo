@@ -20,7 +20,9 @@
 	compatible = "udoo,imx6q-udoo", "fsl,imx6q";	
 
 	aliases {
-                mxcfb0 = &mxcfb1;
+                mxcfb1 = &mxcfb2;
+                mxcfb2 = &mxcfb3;
+                mxcfb3 = &mxcfb4;
         };
         
         regulators {
@@ -32,10 +34,6 @@
                         status = "okay";
 		};   
         };
-};
-
-&mxcfb1 {
-        status = "okay";
 };
 
 &ldb {
