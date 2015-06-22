@@ -33,7 +33,7 @@
 		};   
         };
         
-	mxcfb2: fb@0 {
+	mxcfb2: fb@1 {
 		compatible = "fsl,mxc_sdc_fb";
 		disp_dev = "ldb";
 		interface_pix_fmt = "RGB666";
@@ -50,6 +50,7 @@
 	lvds-channel@0 {     
             status = "okay";
             fsl,data-width = <18>;
+		crtc = "ipu1-di1";
             display-timings {
                 native-mode = <&timing0>;
                 timing0: 800x480 {

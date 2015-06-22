@@ -33,7 +33,7 @@
 		};   
         };
         
-	mxcfb2: fb@0 {
+	mxcfb2: fb@1 {
 		compatible = "fsl,mxc_sdc_fb";
 		disp_dev = "ldb";
                 default_bpp = <32>;
@@ -49,6 +49,7 @@
         status = "okay";
         lvds-channel@0 {        
             status = "okay";
+	    crtc = "ipu1-di1";
             fsl,data-width = <24>;
             display-timings {
                 native-mode = <&timing1>;
