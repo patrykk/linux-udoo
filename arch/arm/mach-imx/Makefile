@@ -85,7 +85,7 @@ obj-$(CONFIG_SOC_IMX6SL) += mach-imx6sl.o
 obj-$(CONFIG_SOC_IMX6SX) += mach-imx6sx.o
 obj-$(CONFIG_SOC_IMX7D) += mach-imx7d.o
 
-ifeq ($(CONFIG_PM_SLEEP),y)
+ifeq ($(CONFIG_PM),y)
 obj-y += busfreq-imx6.o
 AFLAGS_ddr3_freq_imx6.o :=-Wa,-march=armv7-a
 obj-$(CONFIG_SOC_IMX6Q) += ddr3_freq_imx6.o busfreq_ddr3.o

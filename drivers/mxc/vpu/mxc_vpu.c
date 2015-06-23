@@ -1243,6 +1243,7 @@ recover_clk:
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0)
+#ifdef CONFIG_PM_SLEEP
 static int vpu_runtime_suspend(struct device *dev)
 {
 	release_bus_freq(BUS_FREQ_HIGH);
@@ -1259,6 +1260,7 @@ static const struct dev_pm_ops vpu_pm_ops = {
 	SET_RUNTIME_PM_OPS(vpu_runtime_suspend, vpu_runtime_resume, NULL)
 	SET_SYSTEM_SLEEP_PM_OPS(vpu_suspend, vpu_resume)
 };
+#endif
 #endif
 
 #else
@@ -1282,7 +1284,7 @@ static struct platform_driver mxcvpu_driver = {
 		   .name = "mxc_vpu",
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0)
 		   .of_match_table = vpu_of_match,
-#ifdef CONFIG_PM
+#ifdef CONFIG_PM_SLEEP
 		   .pm = &vpu_pm_ops,
 #endif
 #endif
