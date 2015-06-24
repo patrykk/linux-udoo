@@ -1100,6 +1100,7 @@ static const struct snd_soc_component_driver fsl_ssi_component = {
 };
 
 static struct snd_soc_dai_driver fsl_ssi_ac97_dai = {
+	.probe = fsl_ssi_dai_probe,
 	.bus_control = true,
 	.playback = {
 		.stream_name = "AC97 Playback",
@@ -1308,7 +1309,7 @@ static int fsl_ssi_probe(struct platform_device *pdev)
 	sprop = of_get_property(np, "fsl,mode", NULL);
 	if (sprop) {
 		if (!strcmp(sprop, "ac97-slave"))
-			ssi_private->dai_fmt = SND_SOC_DAIFMT_AC97;
+			ssi_private->dai_fmt = SND_SOC_DAIFMT_AC97 | SND_SOC_DAIFMT_NB_NF | SND_SOC_DAIFMT_CBM_CFS;
 	}
 
 	ssi_private->use_dma = !of_property_read_bool(np,
@@ -1378,8 +1379,15 @@ static int fsl_ssi_probe(struct platform_device *pdev)
 			return ret;
 	}
 
+	if (fsl_ssi_is_ac97(ssi_private)) {
+                ret = clk_prepare_enable(fsl_ac97_data->clk);
+                if (ret)
+                        goto error_asoc_register;
+        }
+
 	ret = devm_snd_soc_register_component(&pdev->dev, &fsl_ssi_component,
 					      &ssi_private->cpu_dai_drv, 1);
+
 	if (ret) {
 		dev_err(&pdev->dev, "failed to register DAI: %d\n", ret);
 		goto error_asoc_register;
