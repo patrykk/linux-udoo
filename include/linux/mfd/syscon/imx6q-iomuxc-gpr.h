@@ -391,6 +391,16 @@
 #define IMX6Q_GPR13_SATA_MPLL_CLK_EN		BIT(1)
 #define IMX6Q_GPR13_SATA_TX_EDGE_RATE		BIT(0)
 
+/* For imx6dl iomux gpr register field definitions */
+#define IMX6DL_GPR3_LVDS1_MUX_CTL_MASK         (0x3 << 8)
+#define IMX6DL_GPR3_LVDS1_MUX_CTL_IPU1_DI0     (0x0 << 8)
+#define IMX6DL_GPR3_LVDS1_MUX_CTL_IPU1_DI1     (0x1 << 8)
+#define IMX6DL_GPR3_LVDS1_MUX_CTL_LCDIF                (0x2 << 8)
+#define IMX6DL_GPR3_LVDS0_MUX_CTL_MASK         (0x3 << 6)
+#define IMX6DL_GPR3_LVDS0_MUX_CTL_IPU1_DI0     (0x0 << 6)
+#define IMX6DL_GPR3_LVDS0_MUX_CTL_IPU1_DI1     (0x1 << 6)
+#define IMX6DL_GPR3_LVDS0_MUX_CTL_LCDIF                (0x2 << 6)
+
 /* For imx6sl iomux gpr register field define */
 #define IMX6SL_GPR1_FEC_CLOCK_MUX1_SEL_MASK    (0x3 << 17)
 #define IMX6SL_GPR1_FEC_CLOCK_MUX2_SEL_MASK    (0x1 << 14)
@@ -405,6 +415,15 @@
 #define IMX6SX_GPR1_FEC_CLOCK_MUX_SEL_MASK		(0x3 << 13)
 #define IMX6SX_GPR1_FEC_CLOCK_PAD_DIR_MASK		(0x3 << 17)
 #define IMX6SX_GPR1_FEC_CLOCK_MUX_SEL_EXT		(0x3 << 13)
+
+#define IMX6SX_GPR2_MQS_OVERSAMPLE_MASK                        (0x1 << 26)
+#define IMX6SX_GPR2_MQS_OVERSAMPLE_SHIFT               (26)
+#define IMX6SX_GPR2_MQS_EN_MASK                                (0x1 << 25)
+#define IMX6SX_GPR2_MQS_EN_SHIFT                       (25)
+#define IMX6SX_GPR2_MQS_SW_RST_MASK                    (0x1 << 24)
+#define IMX6SX_GPR2_MQS_SW_RST_SHIFT                   (24)
+#define IMX6SX_GPR2_MQS_CLK_DIV_MASK                   (0xFF << 16)
+#define IMX6SX_GPR2_MQS_CLK_DIV_SHIFT                  (16)
 
 #define IMX6SX_GPR4_FEC_ENET1_STOP_REQ			(0x1 << 3)
 #define IMX6SX_GPR4_FEC_ENET2_STOP_REQ			(0x1 << 4)

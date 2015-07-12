@@ -189,6 +189,28 @@ enum dma_ctrl_flags {
 };
 
 /**
+ * enum dma_ctrl_cmd - DMA operations that can optionally be exercised
+ * on a running channel.
+ * @DMA_TERMINATE_ALL: terminate all ongoing transfers
+ * @DMA_PAUSE: pause ongoing transfers
+ * @DMA_RESUME: resume paused transfer
+ * @DMA_SLAVE_CONFIG: this command is only implemented by DMA controllers
+ * that need to runtime reconfigure the slave channels (as opposed to passing
+ * configuration data in statically from the platform). An additional
+ * argument of struct dma_slave_config must be passed in with this
+ * command.
+ * @FSLDMA_EXTERNAL_START: this command will put the Freescale DMA controller
+ * into external start mode.
+ */
+enum dma_ctrl_cmd {
+        DMA_TERMINATE_ALL,
+        DMA_PAUSE,
+        DMA_RESUME,
+        DMA_SLAVE_CONFIG,
+        FSLDMA_EXTERNAL_START,
+};
+
+/**
  * enum sum_check_bits - bit position of pq_check_flags
  */
 enum sum_check_bits {
@@ -339,6 +361,8 @@ struct dma_slave_config {
 	u32 dst_maxburst;
 	bool device_fc;
 	unsigned int slave_id;
+        int dma_request;
+        int dma_request2;
 };
 
 /**
@@ -671,11 +695,12 @@ struct dma_device {
 	struct dma_async_tx_descriptor *(*device_prep_dma_cyclic)(
 		struct dma_chan *chan, dma_addr_t buf_addr, size_t buf_len,
 		size_t period_len, enum dma_transfer_direction direction,
-		unsigned long flags);
+		unsigned long flags, void *context);
 	struct dma_async_tx_descriptor *(*device_prep_interleaved_dma)(
 		struct dma_chan *chan, struct dma_interleaved_template *xt,
 		unsigned long flags);
-
+	int (*device_control)(struct dma_chan *chan, enum dma_ctrl_cmd cmd,
+                unsigned long arg);
 	int (*device_config)(struct dma_chan *chan,
 			     struct dma_slave_config *config);
 	int (*device_pause)(struct dma_chan *chan);
@@ -741,7 +766,7 @@ static inline struct dma_async_tx_descriptor *dmaengine_prep_dma_cyclic(
 		unsigned long flags)
 {
 	return chan->device->device_prep_dma_cyclic(chan, buf_addr, buf_len,
-						period_len, dir, flags);
+						period_len, dir, flags, NULL);
 }
 
 static inline struct dma_async_tx_descriptor *dmaengine_prep_interleaved_dma(
