@@ -24,11 +24,13 @@ copy kernel file
 	
 compile dtb file
 
-    make imx6q-udoo.dtb
+    make imx6q-udoo.dtb (for quad)
+    make imx6dl-udoo.dtb (for dl)
  
 copy dtb file
 
-    cp arch/arm/boot/dts/uImage  /boot/
+    cp arch/arm/boot/dts/imx6q-udoo.dtb  /boot/ (for quad)
+    cp arch/arm/boot/dts/imx6dl-udoo.dtb  /boot/ (for dl)
 
 copy firmware
 
@@ -70,6 +72,7 @@ Work:
  - Xorg driver with xrandr
  - OpenCL
  - HDMI audio
+ - Analog Audio (codec vt1613)
  - ASRC
  - sam3x port
  - i2c (no tested - could be unstable)
@@ -77,17 +80,31 @@ Work:
  - imx watchdog
  - imx thermal
  - GPIO - (check documentation for pins scheme and execute f.ex. "echo 40 > /sys/class/gpio/export" for gpio40)
- - PWM (for inverted polarity need small patch) 
+ - PWM (for inverted polarity we added small patch) 
  - SATA - on quad
  - CAN 
  - Arduino with Udoo patch (export gpio 0 and 117: "echo 0 > /sys/class/gpio/export; echo 117 > /sys/class/gpio/export")
- - XBMC 
  - gstream vpu
- - freescale camera (no tested)
+ - freescale camera
+ - touch screen 7' and 15'
+
+Tested apps
+
+ - XBMC (preloaded framebuffer libs)
+ - gstream
+ - chromium with EGL and flash 12.x
+ - neverball
+ - stellarium
+ - celestia
+
+
+Unstable
+
+ - HDMI connected to DVI adapter 
+ - CAAM
 
 
 Doesn't Work
 
- - CAAM (very unstable)
  - PCIe
 
