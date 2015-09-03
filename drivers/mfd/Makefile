@@ -193,4 +193,5 @@ obj-$(CONFIG_MFD_SKY81452)	+= sky81452.o
 intel-soc-pmic-objs		:= intel_soc_pmic_core.o intel_soc_pmic_crc.o
 intel-soc-pmic-$(CONFIG_INTEL_PMC_IPC)	+= intel_soc_pmic_bxtwc.o
 obj-$(CONFIG_INTEL_SOC_PMIC)	+= intel-soc-pmic.o
-obj-$(CONFIG_MFD_MT6397)	+= mt6397-core.o
+obj-$(CONFIG_MFD_MT6398)	+= mt6397-core.o
+obj-$(CONFIG_MFD_MXC_HDMI)      += mxc-hdmi-core.o
