@@ -545,19 +545,6 @@
         lanes = <1>;
 };
 
-&ssi1 {
-        pinctrl-names = "default", "ac97-running", "ac97-reset", "ac97-warm-reset";
-        pinctrl-0 = <&pinctrl_audmux>;
-        pinctrl-1 = <&pinctrl_audmux>;
-        pinctrl-2 = <&ac97link_reset>;
-        pinctrl-3 = <&ac97link_warm_reset>;
-        ac97-gpios = <&gpio2 22 0 &gpio2 24 0 &gpio2 30 0>;
-        fsl,mode = "ac97-slave";
-        codec-handle = <1>;
-        status = "okay";
-        ac97-reset = <&gpio2 30 0>;
-};
-
 &spdif {
         pinctrl-names = "default";
         pinctrl-0 = <&pinctrl_spdif_1>;
