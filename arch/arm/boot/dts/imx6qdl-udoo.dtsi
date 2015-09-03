@@ -217,7 +217,7 @@
         status = "okay";
 };
 
-&hdmi_core {
+&hdmi {
 	ipu_id = <0>;
 	disp_id = <0>;
 	status = "okay";
@@ -254,7 +254,7 @@
 	pinctrl-0 = <&pinctrl_i2c2>;
 	status = "okay";
 
-	hdmi: edid@50 {
+	hdmi_screen: edid@50 {
 		compatible = "fsl,imx6-hdmi-i2c";
 		reg = <0x50>;
 	};
