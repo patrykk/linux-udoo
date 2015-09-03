@@ -186,7 +186,6 @@ config DRM_SAVAGE
 	  Choose this option if you have a Savage3D/4/SuperSavage/Pro/Twister
 	  chipset. If M is selected the module will be called savage.
 
-<<<<<<< HEAD
 config DRM_VGEM
 	tristate "Virtual GEM provider"
 	depends on DRM
@@ -195,14 +194,12 @@ config DRM_VGEM
 	  as used by Mesa's software renderer for enhanced performance.
 	  If M is selected the module will be called vgem.
 
-=======
 config DRM_VIVANTE
         tristate "Vivante GCCore"
         depends on DRM
         help
           Choose this option if you have a Vivante graphics card.
           If M is selected, the module will be called vivante.
->>>>>>> f282add... Makefiles update
 
 source "drivers/gpu/drm/exynos/Kconfig"
 
