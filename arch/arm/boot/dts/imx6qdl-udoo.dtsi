@@ -545,6 +545,10 @@
         lanes = <1>;
 };
 
+&snvs_poweroff {
+	status = "okay";
+};
+
 &spdif {
         pinctrl-names = "default";
         pinctrl-0 = <&pinctrl_spdif_1>;
