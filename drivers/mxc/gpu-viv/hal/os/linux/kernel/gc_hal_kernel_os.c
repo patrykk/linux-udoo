@@ -6855,7 +6855,8 @@ gckOS_QueryProfileTickRate(
 {
     struct timespec res;
 
-    hrtimer_get_res(CLOCK_MONOTONIC, &res);
+    res.tv_sec = 0;
+    res.tv_nsec = hrtimer_resolution;
 
     *TickRate = res.tv_nsec + res.tv_sec * 1000000000ULL;
 
