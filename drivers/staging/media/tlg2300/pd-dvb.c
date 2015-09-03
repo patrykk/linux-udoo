@@ -249,7 +249,7 @@ static int poseidon_fe_get_tune_settings(struct dvb_frontend *fe,
 	return 0;
 }
 
-static int poseidon_read_status(struct dvb_frontend *fe, fe_status_t *stat)
+static int poseidon_read_status(struct dvb_frontend *fe, enum fe_status *stat)
 {
 	struct poseidon *pd = fe->demodulator_priv;
 	s32 ret = -1, cmd_status;
