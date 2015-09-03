@@ -376,8 +376,9 @@
 };
 */
 /*&mipi_dsi {
-	port@2 {
-		reg = <2>;
+	ports {
+		port@2 {
+			reg = <2>;
 
 			mipi_mux_2: endpoint {
 				remote-endpoint = <&ipu2_di0_mipi>;
