@@ -1710,7 +1710,7 @@ static int sdma_probe(struct platform_device *pdev)
 	}
 
 	if (np)
-		sdma->iram_pool = of_get_named_gen_pool(np, "iram", 0);
+		sdma->iram_pool = of_gen_pool_get(np, "iram", 0);
 	if (!sdma->iram_pool)
 		dev_warn(&pdev->dev, "no iram assigned, using external mem\n");
 
