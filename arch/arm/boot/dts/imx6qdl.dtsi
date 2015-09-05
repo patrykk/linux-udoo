@@ -812,11 +812,11 @@
 			gpc: gpc@020dc000 {
 				compatible = "fsl,imx6q-gpc";
 				reg = <0x020dc000 0x4000>;
-				//interrupt-controller;
-				//#iterrupt-cells = <3>;
+				interrupt-controller;
+				#interrupt-cells = <3>;
 				interrupts = <0 89 IRQ_TYPE_LEVEL_HIGH>,
 					     <0 90 IRQ_TYPE_LEVEL_HIGH>;
-				//interrupt-parent = <&intc>;
+				interrupt-parent = <&intc>;
 				pu-supply = <&reg_pu>;
 				clocks = <&clks IMX6QDL_CLK_GPU3D_CORE>,
 					 <&clks IMX6QDL_CLK_GPU3D_SHADER>,
