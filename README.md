@@ -87,6 +87,8 @@ Work:
  - gstream vpu
  - freescale camera
  - touch screen 7' and 15'
+ - CAAM
+
 
 Tested apps
 
@@ -101,7 +103,6 @@ Tested apps
 Unstable
 
  - HDMI connected to DVI adapter 
- - CAAM
 
 
 Doesn't Work
