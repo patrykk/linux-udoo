@@ -1262,11 +1262,20 @@ static int mx6s_vidioc_enum_fmt_vid_cap(struct file *file, void  *priv,
 
 	WARN_ON(priv != file->private_data);
 
-	ret = v4l2_subdev_call(sd, video, enum_mbus_fmt, index, &code);
-	if (ret < 0)
+//	ret = v4l2_subdev_call(sd, video, enum_mbus_fmt, index, &code);
+//	if (ret < 0)
 		/* no more formats */
-		return -EINVAL;
+//		return -EINVAL;
 
+	if (v4l2_subdev_has_op(sd, pad, enum_mbus_code)) {
+		struct v4l2_subdev_mbus_code_enum c;
+		c.index = index;
+
+		ret = v4l2_subdev_call(sd, pad, enum_mbus_code, NULL, &c);
+		if (ret < 0)
+			return -EINVAL;
+		
+		code = c.code;
 
 	fmt = format_by_mbus(code);
 	if (!fmt) {
@@ -1275,8 +1284,8 @@ static int mx6s_vidioc_enum_fmt_vid_cap(struct file *file, void  *priv,
 	}
 
 	strlcpy(f->description, fmt->name, sizeof(f->description));
-	f->pixelformat = fmt->pixelformat;
-
+	f->pixelformat = csi_dev->fmt->pixelformat;
+	}
 	return 0;
 }
 
@@ -1286,7 +1295,11 @@ static int mx6s_vidioc_try_fmt_vid_cap(struct file *file, void *priv,
 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
 	struct v4l2_subdev *sd = csi_dev->sd;
 	struct v4l2_pix_format *pix = &f->fmt.pix;
-	struct v4l2_mbus_framefmt mbus_fmt;
+	//struct v4l2_mbus_framefmt mbus_fmt;
+	struct v4l2_subdev_pad_config pad_cfg;
+	struct v4l2_subdev_format format = {
+		.which = V4L2_SUBDEV_FORMAT_TRY,
+	};
 	struct mx6s_fmt *fmt;
 	int ret;
 
@@ -1297,9 +1310,11 @@ static int mx6s_vidioc_try_fmt_vid_cap(struct file *file, void *priv,
 		return -EINVAL;
 	}
 
-	v4l2_fill_mbus_format(&mbus_fmt, pix, fmt->mbus_code);
-	ret = v4l2_subdev_call(sd, video, try_mbus_fmt, &mbus_fmt);
-	v4l2_fill_pix_format(pix, &mbus_fmt);
+	v4l2_fill_mbus_format(&format.format, pix, fmt->mbus_code);
+
+
+	ret = v4l2_subdev_call(sd, pad, set_fmt, &pad_cfg, &format);
+	v4l2_fill_pix_format(pix, &format.format);
 
 	if (pix->field != V4L2_FIELD_INTERLACED)
 		pix->field = V4L2_FIELD_NONE;
@@ -1468,19 +1483,36 @@ static int mx6s_vidioc_s_parm(struct file *file, void *priv,
 static int mx6s_vidioc_enum_framesizes(struct file *file, void *priv,
 					 struct v4l2_frmsizeenum *fsize)
 {
+	int ret;
 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
 	struct v4l2_subdev *sd = csi_dev->sd;
-
-	return v4l2_subdev_call(sd, video, enum_framesizes, fsize);
+	struct v4l2_subdev_frame_size_enum fse = {
+		.index = fsize->index,
+	};
+	//return v4l2_subdev_call(sd, video, enum_framesizes, fsize);
+	ret =  v4l2_subdev_call(sd, pad, enum_frame_size, NULL, &fse);
+//	if (ret < 0)
+ 		return ret;
 }
 
 static int mx6s_vidioc_enum_frameintervals(struct file *file, void *priv,
 		struct v4l2_frmivalenum *interval)
 {
+	int ret;
 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
 	struct v4l2_subdev *sd = csi_dev->sd;
-
-	return v4l2_subdev_call(sd, video, enum_frameintervals, interval);
+	struct v4l2_subdev_frame_interval_enum fie = {
+                .index = interval->index,
+                .width = interval->width,
+                .height = interval->height,
+                .which = V4L2_SUBDEV_FORMAT_ACTIVE,
+        };
+	ret = v4l2_subdev_call(sd, pad, enum_frame_interval, NULL, &fie);
+	 if (ret)
+               return ret;
+        interval->type = V4L2_FRMIVAL_TYPE_DISCRETE;
+        interval->discrete = fie.interval;
+        return 0;
 }
 
 static const struct v4l2_ioctl_ops mx6s_csi_ioctl_ops = {
