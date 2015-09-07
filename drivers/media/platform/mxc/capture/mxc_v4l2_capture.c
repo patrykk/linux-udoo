@@ -2511,7 +2511,7 @@ static struct v4l2_file_operations mxc_v4l_fops = {
 	.open = mxc_v4l_open,
 	.release = mxc_v4l_close,
 	.read = mxc_v4l_read,
-	.ioctl = mxc_v4l_ioctl,
+	.unlocked_ioctl = mxc_v4l_ioctl,
 	.mmap = mxc_mmap,
 	.poll = mxc_poll,
 };
