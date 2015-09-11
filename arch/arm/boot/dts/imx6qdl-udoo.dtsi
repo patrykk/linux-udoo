@@ -220,6 +220,17 @@
 		mux-int-port = <1>; 
 		mux-ext-port = <6>; 
 	};
+
+	udoo_ard: udoo_ard_manager {
+                compatible = "udoo,imx6q-udoo-ard";
+                pinctrl-names = "default";
+                pinctrl-0 = <&pinctrl_udoo_ard_alt>;
+                bossac-clk-gpio   = <&gpio6 3 GPIO_ACTIVE_LOW>;
+                bossac-dat-gpio   = <&gpio5 18 GPIO_ACTIVE_LOW>;
+                bossac-erase-gpio = <&gpio4 21 GPIO_ACTIVE_LOW>;
+                bossac-reset-gpio = <&gpio1 0 GPIO_ACTIVE_LOW>;
+                status = "okay";
+        };
 };
 
 &audmux {
@@ -356,15 +367,11 @@
 				
 				MX6QDL_PAD_DISP0_DAT5__GPIO4_IO26 0x80000000  /* select dbg uart*/
 				
-				MX6QDL_PAD_GPIO_0__GPIO1_IO00     0x80000000  /* SAM3X reset    */
-				MX6QDL_PAD_DISP0_DAT0__GPIO4_IO21 0x30b1      /* SAM3X erase    */ 
 				MX6QDL_PAD_GPIO_16__GPIO7_IO11    0xb0b1      /* SAM3X vbus_en  */ 
 				MX6QDL_PAD_SD4_DAT7__GPIO2_IO15   0x80000000  /* SAM3X usb host */
 				
 				MX6QDL_PAD_GPIO_2__GPIO1_IO02     0x80000000  /* panel on       */
 				MX6QDL_PAD_GPIO_4__GPIO1_IO04     0x80000000  /* backlight on   */
-				MX6QDL_PAD_CSI0_PIXCLK__GPIO5_IO18 0x80000000 /* input mon serial*/
-				MX6QDL_PAD_CSI0_DAT17__GPIO6_IO03 0x80000000  /* input mon serial*/
 				
 				MX6QDL_PAD_EIM_A19__GPIO2_IO19    0x80000000  /* writeprotect spi*/
 				
@@ -495,7 +502,16 @@
 				MX6QDL_PAD_KEY_ROW0__UART4_RX_DATA	0x1b0b1
 			>;
 		};
-		
+
+		pinctrl_udoo_ard_alt: udooard2grp {
+                        fsl,pins = <
+                        MX6QDL_PAD_DISP0_DAT0__GPIO4_IO21       0x80000000
+                        MX6QDL_PAD_CSI0_DAT17__GPIO6_IO03       0x80000000
+                        MX6QDL_PAD_CSI0_PIXCLK__GPIO5_IO18      0x80000000
+                        MX6QDL_PAD_GPIO_0__GPIO1_IO00           0x80000000
+                        >;
+                };
+	
 		pinctrl_flexcan1: can1grp {
 			fsl,pins = <
 				MX6QDL_PAD_GPIO_7__FLEXCAN1_TX 0x1b0b1
