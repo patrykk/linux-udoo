@@ -428,13 +428,13 @@
                         MX6QDL_PAD_GPIO_19__GPIO4_IO05                  0x80000000  // pin 44 KEY_VOL_DOWN
                         MX6QDL_PAD_DISP0_DAT22__GPIO5_IO16              0x80000000  // pin 45
                         MX6QDL_PAD_DISP0_DAT23__GPIO5_IO17              0x80000000  // pin 46
-                        MX6QDL_PAD_EIM_D25__GPIO3_IO25                  0x80000000  // pin 47
+                        MX6QDL_PAD_EIM_D25__GPIO3_IO25                  0x80000000  // pin 47 //SPI
                         MX6QDL_PAD_KEY_ROW1__GPIO4_IO09                 0x80000000  // pin 48
                         MX6QDL_PAD_KEY_COL1__GPIO4_IO08                 0x80000000  // pin 49
                         MX6QDL_PAD_EIM_OE__GPIO2_IO25                   0x80000000  // pin 50
                         MX6QDL_PAD_EIM_CS1__GPIO2_IO24                  0x80000000  // pin 51
                         MX6QDL_PAD_EIM_CS0__GPIO2_IO23                  0x80000000  // pin 52
-                        MX6QDL_PAD_EIM_D24__GPIO3_IO24                  0x80000000  // pin 53
+                        MX6QDL_PAD_EIM_D24__GPIO3_IO24                  0x80000000  // pin 53 //SPI
                         >;
                 };*/
 
@@ -488,6 +488,16 @@
                                 MX6QDL_PAD_CSI0_MCLK__CCM_CLKO1	0x130b0
                         >;
                 };
+
+		pinctrl_ecspi2: ecspi2grp {
+           		fsl,pins = <
+               			MX6QDL_PAD_EIM_OE__ECSPI2_MISO      0x100b1
+               			MX6QDL_PAD_EIM_CS1__ECSPI2_MOSI     0x100b1
+               			MX6QDL_PAD_EIM_CS0__ECSPI2_SCLK     0x100b1
+               			MX6QDL_PAD_EIM_D24__GPIO3_IO24  0x000b1 /* CS SS2 */
+               			MX6QDL_PAD_EIM_D25__GPIO3_IO25  0x000b1 /* CS SS3 */
+           		>;
+       		};
 
 		pinctrl_uart2: uart2grp {
 			fsl,pins = <
@@ -686,4 +696,27 @@
         pinctrl-names = "default";
         pinctrl-0 = <&pinctrl_spdif_1>;
         status = "disabled";
+};
+
+&ecspi2 {
+   	pinctrl-names = "default";
+   	pinctrl-0 = <&pinctrl_ecspi2>;
+   	fsl,spi-num-chipselects = <2>;
+   	cs-gpios = <
+        	&gpio3 24 GPIO_ACTIVE_HIGH
+        	&gpio3 25 GPIO_ACTIVE_HIGH
+        	>;
+   	status = "disabled";
+   	
+	spidev0: spi@0 {
+		compatible = "spidev";
+		reg = <0>;
+		spi-max-frequency = <54000000>;
+	};
+
+	spidev1: spi@1 {
+		compatible = "spidev";
+		reg = <1>;
+		spi-max-frequency = <54000000>;
+	};
 };
