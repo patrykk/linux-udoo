@@ -6858,7 +6858,7 @@ gckOS_QueryProfileTickRate(
     res.tv_sec = 0;
     res.tv_nsec = hrtimer_resolution;
 
-    *TickRate = res.tv_nsec + res.tv_sec * 1000000000ULL;
+    *TickRate = res.tv_nsec;
 
     return gcvSTATUS_OK;
 }
