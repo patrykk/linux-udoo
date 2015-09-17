@@ -1,8 +1,8 @@
 linux-udoo
 ==========
 
-Linux Udoo Kernel - 4.0.x
-This branch will base on 3.14.28-ga freescales kernel
+Linux Udoo Kernel - 4.2.x
+This branch base on 3.14.28/38-ga freescales kernel
 
 Howto install:
 -----------------
