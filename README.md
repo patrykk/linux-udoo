@@ -43,7 +43,7 @@ Versions
 --------
 
 This has been tested with:
- - uboot-udoo-quad 2015.1 
+ - uboot-udoo-quad 2015.1 / uboot-udoo 2015.10-rc3 
  - libcec-imx6 13.20141201
  - xf86-video-imx-viv 3.10.53_1.1.0 (for lxdm need some patch)
  - gst-imx 0.10.1.r7
@@ -67,7 +67,7 @@ Work:
  - wifi (stable)
  - VPU
  - GPU 
- - HDMI video (kernel commands for stable HDMI: video=mxcfb0:dev=hdmi,1920x1080M@60,bpp=32)
+ - HDMI video (with DVI adapter too) (kernel commands for stable HDMI: video=mxcfb0:dev=hdmi,1920x1080M@60,bpp=32)
  - LVDS support (kernel commands : video=mxcfb1:dev=ldb,LDB-WVGA,if=RGB666,bpp=32)
  - Xorg driver with xrandr
  - OpenCL
@@ -88,6 +88,7 @@ Work:
  - freescale camera
  - touch screen 7' and 15'
  - CAAM
+ - SPI (change disabled to okay in dtsi file)
 
 
 Tested apps
@@ -98,11 +99,6 @@ Tested apps
  - neverball
  - stellarium
  - celestia
-
-
-Unstable
-
- - HDMI connected to DVI adapter 
 
 
 Doesn't Work
