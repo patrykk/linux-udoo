@@ -231,6 +231,14 @@
                 bossac-reset-gpio = <&gpio1 0 GPIO_ACTIVE_LOW>;
                 status = "okay";
         };
+	
+	onewire@0 { /* example for pin 08 */
+        	compatible = "w1-gpio";
+                pinctrl-names = "default";
+                pinctrl-0 = <&w1_gpio_pins>;
+                status = "disabled";
+                gpios = <&gpio1 21 0>; 
+	};
 };
 
 &audmux {
@@ -378,6 +386,7 @@
 				MX6QDL_PAD_GPIO_3__GPIO1_IO03     0x30b1      /* arduino pinout  */
 			>;
 		};
+
 		/*
 		external_hog: hoggrp-2 {
                         fsl,pins = <
@@ -498,6 +507,12 @@
                			MX6QDL_PAD_EIM_D25__GPIO3_IO25  0x000b1 /* CS SS3 */
            		>;
        		};
+
+                w1_gpio_pins: w1-gpio@0 {
+                        fsl,pins = <
+                                MX6QDL_PAD_SD1_DAT3__GPIO1_IO21 0x80000000 /* example for pin 08 */
+                        >;
+                };
 
 		pinctrl_uart2: uart2grp {
 			fsl,pins = <
