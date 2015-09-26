@@ -89,6 +89,7 @@ Work:
  - touch screen 7' and 15'
  - CAAM
  - SPI (change disabled to okay in dtsi file)
+ - 1wire (base on onewire-gpio - change disabled to okay in dtsi file)
 
 
 Tested apps
