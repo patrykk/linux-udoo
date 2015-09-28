@@ -1391,6 +1391,8 @@ static int mxc_v4l2_s_param(cam_data *cam, struct v4l2_streamparm *parm)
 		csi_param.data_width = IPU_CSI_DATA_WIDTH_8;
 	}
 
+	csi_param.pack_tight = (csi_param.data_width == IPU_CSI_DATA_WIDTH_10) ? 1 : 0;
+
 	csi_param.Vsync_pol = ifparm.u.bt656.nobt_vs_inv;
 	csi_param.Hsync_pol = ifparm.u.bt656.nobt_hs_inv;
 	csi_param.ext_vsync = ifparm.u.bt656.bt_sync_correct;
