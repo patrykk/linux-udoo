@@ -1408,7 +1408,45 @@ static int mxc_v4l2_s_param(cam_data *cam, struct v4l2_streamparm *parm)
 	pr_debug("   g_fmt_cap returns widthxheight of input as %d x %d\n",
 			cam_fmt.fmt.pix.width, cam_fmt.fmt.pix.height);
 
-	csi_param.data_fmt = cam_fmt.fmt.pix.pixelformat;
+	switch (cam_fmt.fmt.pix.pixelformat) {
+	case V4L2_PIX_FMT_RGB565:
+		csi_param.data_fmt = IPU_PIX_FMT_RGB565;
+		break;
+	case V4L2_PIX_FMT_BGR24:
+		csi_param.data_fmt = IPU_PIX_FMT_BGR24;
+		break;
+	case V4L2_PIX_FMT_RGB24:
+		csi_param.data_fmt = IPU_PIX_FMT_RGB24;
+		break;
+	case V4L2_PIX_FMT_BGR32:
+		csi_param.data_fmt = IPU_PIX_FMT_BGR32;
+		break;
+	case V4L2_PIX_FMT_RGB32:
+		csi_param.data_fmt = IPU_PIX_FMT_RGB32;
+		break;
+	case V4L2_PIX_FMT_YUV422P:
+		csi_param.data_fmt = IPU_PIX_FMT_YUV422P;
+		break;
+	case V4L2_PIX_FMT_UYVY:
+		csi_param.data_fmt = IPU_PIX_FMT_UYVY;
+		break;
+	case V4L2_PIX_FMT_YUYV:
+		csi_param.data_fmt = IPU_PIX_FMT_YUYV;
+		break;
+	case V4L2_PIX_FMT_YUV420:
+		csi_param.data_fmt = IPU_PIX_FMT_YUV420P;
+		break;
+	case V4L2_PIX_FMT_YVU420:
+		csi_param.data_fmt = IPU_PIX_FMT_YVU420P;;
+		break;
+	case V4L2_PIX_FMT_NV12:
+		csi_param.data_fmt = IPU_PIX_FMT_NV12;
+		break;
+	case V4L2_PIX_FMT_SBGGR8:
+	default:
+		csi_param.data_fmt = IPU_PIX_FMT_GENERIC;
+		break;
+	}
 
 	cam->crop_bounds.top = cam->crop_bounds.left = 0;
 	cam->crop_bounds.width = cam_fmt.fmt.pix.width;
