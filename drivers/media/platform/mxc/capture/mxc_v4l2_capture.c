@@ -37,6 +37,9 @@
 #include <linux/mutex.h>
 #include <linux/mxcfb.h>
 #include <linux/of_device.h>
+#include <linux/mfd/syscon.h>
+#include <linux/mfd/syscon/imx6q-iomuxc-gpr.h>
+#include <linux/regmap.h>
 //#include <media/v4l2-chip-ident.h>
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-device.h>
@@ -2724,7 +2727,7 @@ static int init_camera_struct(cam_data *cam, struct platform_device *pdev)
 	const struct of_device_id *of_id =
 			of_match_device(mxc_v4l2_dt_ids, &pdev->dev);
 	struct device_node *np = pdev->dev.of_node;
-	int ipu_id, csi_id, mclk_source;
+	int ipu_id, csi_id, mclk_source, def_input;
 	int ret = 0;
 	static int camera_id;
 	struct v4l2_device *v4l2_dev;
@@ -2748,6 +2751,10 @@ static int init_camera_struct(cam_data *cam, struct platform_device *pdev)
 		dev_err(&pdev->dev, "sensor mclk missing or invalid\n");
 		return ret;
 	}
+
+	ret = of_property_read_u32(np, "default_input", &def_input);
+	if (ret || (def_input != 0 && def_input != 1))
+		def_input = 0;
 
 	/* Default everything to 0 */
 	memset(cam, 0, sizeof(cam_data));
@@ -2840,6 +2847,7 @@ static int init_camera_struct(cam_data *cam, struct platform_device *pdev)
 	cam->csi = csi_id;
 	cam->mclk_source = mclk_source;
 	cam->mclk_on[cam->mclk_source] = false;
+	cam->current_input = def_input;
 
 	cam->enc_callback = camera_callback;
 	init_waitqueue_head(&cam->power_queue);
