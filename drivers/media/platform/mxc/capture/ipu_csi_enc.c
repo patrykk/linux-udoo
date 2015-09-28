@@ -120,6 +120,8 @@ static int csi_enc_setup(cam_data *cam)
 		pixel_fmt = IPU_PIX_FMT_BGR32;
 	else if (cam->v2f.fmt.pix.pixelformat == V4L2_PIX_FMT_RGB32)
 		pixel_fmt = IPU_PIX_FMT_RGB32;
+	else if (cam->v2f.fmt.pix.pixelformat == V4L2_PIX_FMT_SBGGR8)
+		pixel_fmt = IPU_PIX_FMT_GENERIC;
 	else {
 		printk(KERN_ERR "format not supported\n");
 		return -EINVAL;
