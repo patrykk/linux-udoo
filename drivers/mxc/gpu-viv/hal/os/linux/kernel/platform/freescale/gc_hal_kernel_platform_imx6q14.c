@@ -361,7 +361,7 @@ struct imx_priv {
     struct clk         *clk_2d_axi;
     struct clk         *clk_vg_axi;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0) || LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
     /*Power management.*/
     struct regulator      *gpu_regulator;
@@ -508,7 +508,7 @@ _GetPower(
     priv->rstc[gcvCORE_VG] = IS_ERR(rstc) ? NULL : rstc;
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
     /*get gpu regulator*/
     priv->gpu_regulator = regulator_get(pdev, "cpu_vddgpu");
@@ -650,7 +650,7 @@ _SetPower(
     )
 {
     struct imx_priv* priv = Platform->priv;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0) || LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
     int ret;
 #endif
@@ -658,7 +658,7 @@ _SetPower(
 
     if (Enable)
     {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0) || LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
         if(!IS_ERR(priv->gpu_regulator)) {
             ret = regulator_enable(priv->gpu_regulator);
@@ -681,7 +681,7 @@ _SetPower(
         pm_runtime_put_sync(priv->pmdev);
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0) || LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
         if(!IS_ERR(priv->gpu_regulator))
             regulator_disable(priv->gpu_regulator);
