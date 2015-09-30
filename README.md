@@ -2,7 +2,7 @@ linux-udoo
 ==========
 
 Linux Udoo Kernel - 4.2.x
-This branch base on 3.14.28/38-ga freescales kernel
+This branch base on 3.14.28/38-ga freescales kernel - vivante driver 5.0.11p7.1
 
 Howto install:
 -----------------
@@ -45,16 +45,18 @@ Versions
 This has been tested with:
  - uboot-udoo-quad 2015.1 / uboot-udoo 2015.10-rc3 
  - libcec-imx6 13.20141201
- - xf86-video-imx-viv 3.10.53_1.1.0 (for lxdm need some patch)
- - gst-imx 0.10.1.r7
- - imx-lib 3.14.28_1.0.0
- - imx-vpu 5.4.28-1 (3.14.28)
- - firmware-imx 3.14.28_1.0.0
- - imx-gpu-viv-g2d 5.0.11.p4.4 (previous name: gpu-viv-g2d) 
- - imx-gpu-viv-(x11|fb) 5.0.11.p4.4 (previous name: gpu-viv-bin-mx6q)
- - libfslvpuwrap 1.0.58 (3.14.28)
- - libimxvpuapi
- - Xorg server 1.16.x
+ - xf86-video-imx-viv 5.0.11.p7.1
+ - gst-imx 0.11.1.r10.gb94ea3c-1
+ - imx-lib 5,1
+ - imx-vpu 5.4.31-1 (3.14.38)
+ - firmware-imx 5.2
+ - imx-gpu-viv-g2d 5.0.11.p7.1 (previous name: gpu-viv-g2d) 
+ - imx-gpu-viv-(x11|fb) 5.0.11.p7.1 (previous name: gpu-viv-bin-mx6q)
+ - libfslvpuwrap 1.0.58 (3.14.38)
+ - libfslcodec - 4.0.7
+ - libfslparser - 4.0.7
+ - libimxvpuapi (branch vpulib-backend - git) 
+ - Xorg server 1.17.x
  - libcec-imx6 13.20141201
 
 
