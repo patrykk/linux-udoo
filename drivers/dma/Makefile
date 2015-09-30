@@ -19,6 +19,7 @@ obj-$(CONFIG_AT_HDMAC) += at_hdmac.o
 obj-$(CONFIG_AT_XDMAC) += at_xdmac.o
 obj-$(CONFIG_MX3_IPU) += ipu/
 obj-$(CONFIG_MXC_PXP_V2) += pxp/
+obj-$(CONFIG_MXC_PXP_V3) += pxp/
 obj-$(CONFIG_TXX9_DMAC) += txx9dmac.o
 obj-$(CONFIG_RENESAS_DMA) += sh/
 obj-$(CONFIG_COH901318) += coh901318.o coh901318_lli.o
