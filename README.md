@@ -68,7 +68,7 @@ Work:
  - VPU
  - GPU 
  - HDMI video (with DVI adapter too) (kernel commands for stable HDMI: video=mxcfb0:dev=hdmi,1920x1080M@60,bpp=32)
- - LVDS support (kernel commands : video=mxcfb1:dev=ldb,LDB-WVGA,if=RGB666,bpp=32)
+ - LVDS support (kernel commands : video=mxcfb1:dev=ldb,LDB-WVGA,if=RGB666,bpp=32) (you need gpio-backlight for backlight support)
  - Xorg driver with xrandr
  - OpenCL
  - HDMI audio
