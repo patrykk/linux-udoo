@@ -28,6 +28,10 @@
 			status = "okay";
 		};
         };
+
+        backlight_lcd {
+                status = "okay";
+        };
         
 	mxcfb2: fb@1 {
 		compatible = "fsl,mxc_sdc_fb";
