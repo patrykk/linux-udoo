@@ -29,6 +29,7 @@
 		compatible = "gpio-backlight";
 		gpios = <&gpio1 4 GPIO_ACTIVE_HIGH>;
 		default-on;
+		status = "disabled";
 	};
 
         /*pwmleds {
