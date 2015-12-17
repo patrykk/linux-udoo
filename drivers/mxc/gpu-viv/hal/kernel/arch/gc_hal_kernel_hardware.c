@@ -185,6 +185,13 @@ _IdentifyHardware(
                                  0x00024,
                                  &Identity->chipRevision));
 
+        if ((Identity->chipModel == gcv2000) && (Identity->chipRevision & 0xffff0000) == 0xffff0000)
+        {
+            Identity->chipModel = gcv3000;
+            Identity->chipRevision &= 0xffff;
+            Identity->chipFlags |= gcvCHIP_FLAG_GC2000_R2;
+        }
+
         if ((Identity->chipModel    == gcv300)
         &&  (Identity->chipRevision == 0x2201)
         )
@@ -1147,13 +1154,17 @@ gckHARDWARE_Construct(
             ? 0x0100
             : 0x0000;
 
-    /* _ResetGPU need powerBaseAddress. */
-    status = _ResetGPU(hardware, Os, Core);
-
-    if (status != gcvSTATUS_OK)
+    /* VIV: Don't do sftware reset here for 0x2000, 0xfff5450 to workaround #12789. */
+    if (!(_IsHardwareMatch(hardware, gcv3000, 0x5450)))
     {
-        gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
-            "_ResetGPU failed: status=%d\n", status);
+        /* _ResetGPU need powerBaseAddress. */
+        status = _ResetGPU(hardware, Os, Core);
+
+        if (status != gcvSTATUS_OK)
+        {
+            gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
+                "_ResetGPU failed: status=%d\n", status);
+        }
     }
 
 #if gcdENABLE_DEC_COMPRESSION && !gcdDEC_ENABLE_AHB
@@ -1446,6 +1457,8 @@ gckHARDWARE_InitializeHardware(
                                      Hardware->core,
                                      0x00024,
                                      &chipRev));
+
+    chipRev &= 0xffff;
 
     if (chipRev != Hardware->identity.chipRevision)
     {
@@ -1740,7 +1753,6 @@ gckHARDWARE_InitializeHardware(
     }
 
     if (_IsHardwareMatch(Hardware, gcv2000, 0x5108)
-     || _IsHardwareMatch(Hardware, gcv2000, 0xffff5450)
      || (_IsHardwareMatch(Hardware, gcv3000, 0x5450) && (Hardware->identity.chipFlags & gcvCHIP_FLAG_GC2000_R2))
      || _IsHardwareMatch(Hardware, gcv320, 0x5007)
      || _IsHardwareMatch(Hardware, gcv320, 0x5303)
@@ -7322,6 +7334,10 @@ gckHARDWARE_IsFeatureAvailable(
     case gcvFEATURE_TEX_CACHE_FLUSH_FIX:
         available = ((((gctUINT32) (Hardware->identity.chipMinorFeatures5)) >> (0 ? 14:14) & ((gctUINT32) ((((1 ? 14:14) - (0 ? 14:14) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 14:14) - (0 ? 14:14) + 1)))))) == (0x1 & ((gctUINT32) ((((1 ? 14:14) - (0 ? 14:14) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 14:14) - (0 ? 14:14) + 1)))))));
         break;
+
+    case gcvFEATURE_MMU:
+        available= ((((gctUINT32) (Hardware->identity.chipMinorFeatures1)) >> (0 ? 28:28) & ((gctUINT32) ((((1 ? 28:28) - (0 ? 28:28) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 28:28) - (0 ? 28:28) + 1)))))) == (0x1 & ((gctUINT32) ((((1 ? 28:28) - (0 ? 28:28) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 28:28) - (0 ? 28:28) + 1)))))));
+	break;
 
     default:
         gcmkFATAL("Invalid feature has been requested.");
