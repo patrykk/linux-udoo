@@ -117,11 +117,7 @@ obj-$(CONFIG_MFD_DA9062)	+= da9062-core.o
 da9063-objs			:= da9063-core.o da9063-irq.o da9063-i2c.o
 obj-$(CONFIG_MFD_DA9063)	+= da9063.o
 obj-$(CONFIG_MFD_DA9150)	+= da9150-core.o
-<<<<<<< HEAD
-
-=======
 obj-$(CONFIG_MFD_MAX17135)      += max17135-core.o
->>>>>>> 0d6403f... Ported Maxim MAX17135 Core from 3.10.9-udoo kernel
 obj-$(CONFIG_MFD_MAX14577)	+= max14577.o
 obj-$(CONFIG_MFD_MAX77686)	+= max77686.o
 obj-$(CONFIG_MFD_MAX77693)	+= max77693.o
