@@ -33,6 +33,7 @@ source "drivers/gpu/vga/Kconfig"
 source "drivers/gpu/host1x/Kconfig"
 source "drivers/gpu/ipu-v3/Kconfig"
 
+source "drivers/gpu/drm/Kconfig"
 if ARCH_MXC
 source "drivers/video/mxc/Kconfig"
 endif
