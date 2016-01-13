@@ -481,14 +481,6 @@ config REGULATOR_MAX17135
         tristate "Maxim MAX17135 Regulator Support"
         depends on MFD_MAX17135
 
-config REGULATOR_MAX77843
-	tristate "Maxim 77843 regulator"
-	depends on MFD_MAX77843
-	help
-	  This driver controls a Maxim 77843 regulator.
-	  The regulator include two 'SAFEOUT' for USB(Universal Serial Bus)
-	  This is suitable for Exynos5433 SoC chips.
-
 config REGULATOR_MC13XXX_CORE
 	tristate
 
