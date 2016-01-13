@@ -11,6 +11,7 @@
 
 #include <linux/module.h>
 #include <linux/of_platform.h>
+#include <linux/clk.h>
 #include <linux/err.h>
 #include <linux/io.h>
 #include <linux/delay.h>
@@ -54,6 +55,7 @@
 #define MX53_USB_PHYCTRL1_PLLDIV_MASK	0x3
 #define MX53_USB_PLL_DIV_24_MHZ		0x01
 
+#define MX6_BM_NON_BURST_SETTING	BIT(1)
 #define MX6_BM_OVER_CUR_DIS		BIT(7)
 #define MX6_BM_WAKEUP_ENABLE		BIT(10)
 #define MX6_BM_ID_WAKEUP		BIT(16)
@@ -83,6 +85,7 @@ struct usbmisc_ops {
 struct imx_usbmisc {
 	void __iomem *base;
 	spinlock_t lock;
+	struct clk *clk;
 	const struct usbmisc_ops *ops;
 };
 
@@ -255,13 +258,20 @@ static int usbmisc_imx6q_init(struct imx_usbmisc_data *data)
 	if (data->index > 3)
 		return -EINVAL;
 
+	spin_lock_irqsave(&usbmisc->lock, flags);
+
 	if (data->disable_oc) {
-		spin_lock_irqsave(&usbmisc->lock, flags);
 		reg = readl(usbmisc->base + data->index * 4);
 		writel(reg | MX6_BM_OVER_CUR_DIS,
 			usbmisc->base + data->index * 4);
-		spin_unlock_irqrestore(&usbmisc->lock, flags);
 	}
+
+	/* SoC non-burst setting */
+	reg = readl(usbmisc->base + data->index * 4);
+	writel(reg | MX6_BM_NON_BURST_SETTING,
+			usbmisc->base + data->index * 4);
+
+	spin_unlock_irqrestore(&usbmisc->lock, flags);
 
 	usbmisc_imx6q_set_wakeup(data, false);
 
@@ -426,6 +436,7 @@ static int usbmisc_imx_probe(struct platform_device *pdev)
 {
 	struct resource	*res;
 	struct imx_usbmisc *data;
+	int ret;
 	struct of_device_id *tmp_dev;
 
 	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
@@ -439,6 +450,20 @@ static int usbmisc_imx_probe(struct platform_device *pdev)
 	if (IS_ERR(data->base))
 		return PTR_ERR(data->base);
 
+	data->clk = devm_clk_get(&pdev->dev, NULL);
+	if (IS_ERR(data->clk)) {
+		dev_err(&pdev->dev,
+			"failed to get clock, err=%ld\n", PTR_ERR(data->clk));
+		return PTR_ERR(data->clk);
+	}
+
+	ret = clk_prepare_enable(data->clk);
+	if (ret) {
+		dev_err(&pdev->dev,
+			"clk_prepare_enable failed, err=%d\n", ret);
+		return ret;
+	}
+
 	tmp_dev = (struct of_device_id *)
 		of_match_device(usbmisc_imx_dt_ids, &pdev->dev);
 	data->ops = (const struct usbmisc_ops *)tmp_dev->data;
@@ -449,6 +474,8 @@ static int usbmisc_imx_probe(struct platform_device *pdev)
 
 static int usbmisc_imx_remove(struct platform_device *pdev)
 {
+	struct imx_usbmisc *usbmisc = dev_get_drvdata(&pdev->dev);
+	clk_disable_unprepare(usbmisc->clk);
 	return 0;
 }
 

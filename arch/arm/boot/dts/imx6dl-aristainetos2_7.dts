@@ -83,7 +83,7 @@
 		port@0 {
 			reg = <0>;
 			lvds0_in: endpoint {
-				remote-endpoint = <&ipu1_di0_lvds0>;
+			//	remote-endpoint = <&ipu1_di0_lvds0>;
 			};
 		};
 
