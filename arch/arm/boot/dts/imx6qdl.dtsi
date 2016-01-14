@@ -779,9 +779,9 @@
 			
 			snvs: snvs@020cc000 {
                                 compatible = "fsl,sec-v4.0-mon", "simple-bus", "syscon", "simple-mfd";
-                                #address-cells = <1>;
-                                #size-cells = <1>;
-                                ranges = <0 0x020cc000 0x4000>;
+//                                #address-cells = <1>;
+  //                              #size-cells = <1>;
+                                reg = <0x020cc000 0x4000>;
 
 				snvs_rtc: snvs-rtc-lp {
 					compatible = "fsl,sec-v4.0-mon-rtc-lp";
@@ -792,7 +792,7 @@
 				};
 
 				snvs_poweroff: snvs-poweroff {
-					compatible = "syscon-poweroff", "fsl,sec-v4.0-poweroff";
+					compatible = "fsl,sec-v4.0-poweroff";
 					regmap = <&snvs>;
 					offset = <0x38>;
 					mask = <0x60>;
