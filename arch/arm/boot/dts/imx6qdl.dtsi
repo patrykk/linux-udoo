@@ -777,7 +777,7 @@
                                 clock-names = "main_clk";
                         };
 			
-			snvs@020cc000 {
+			snvs: snvs@020cc000 {
                                 compatible = "fsl,sec-v4.0-mon", "simple-bus", "syscon", "simple-mfd";
                                 #address-cells = <1>;
                                 #size-cells = <1>;
