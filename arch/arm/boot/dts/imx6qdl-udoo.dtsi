@@ -695,6 +695,7 @@
         pinctrl-2 = <&ac97link_reset>;
         pinctrl-3 = <&ac97link_warm_reset>;
         ac97-gpios = <&gpio4 19 0 &gpio4 18 0 &gpio2 30 0>;
+	cell-index = <0>;
         status = "okay";
 };
 
