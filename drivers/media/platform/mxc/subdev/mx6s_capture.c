@@ -48,6 +48,7 @@
 #include <media/v4l2-device.h>
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-of.h>
+#include <media/videobuf2-v4l2.h>
 #include <media/videobuf2-core.h>
 #include <media/videobuf2-dma-contig.h>
 
@@ -871,6 +872,7 @@ static void mx6s_csi_frame_done(struct mx6s_csi_dev *csi_dev,
 	struct mx6s_buf_internal *ibuf;
 	struct mx6s_buffer *buf;
 	struct vb2_buffer *vb;
+	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
 	unsigned long phys;
 
 	ibuf = list_first_entry(&csi_dev->active_bufs, struct mx6s_buf_internal,
@@ -903,8 +905,8 @@ static void mx6s_csi_frame_done(struct mx6s_csi_dev *csi_dev,
 				vb2_get_plane_payload(vb, 0));
 
 		list_del_init(&buf->internal.queue);
-		v4l2_get_timestamp(&vb->v4l2_buf.timestamp);
-		vb->v4l2_buf.sequence = csi_dev->frame_count;
+		v4l2_get_timestamp(&vbuf->timestamp);
+		vbuf->sequence = csi_dev->frame_count;
 		if (err)
 			vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
 		else
