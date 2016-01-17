@@ -272,7 +272,7 @@ static int vt1613_set_bias_level(struct snd_soc_codec *codec,
 		snd_soc_write(codec, AC97_POWERDOWN, 0xffff);
 		break;
 	}
-	codec->dapm.bias_level = level;
+	snd_soc_codec_init_bias_level(codec, level);
 	return 0;
 }
 
@@ -382,7 +382,7 @@ static int vt1613_codec_probe(struct snd_soc_codec *codec)
         struct snd_ac97 *ac97;
 	struct regmap *regmap;
 
-	ac97 = snd_soc_new_ac97_codec(codec);
+	ac97 = snd_soc_new_ac97_codec(codec, 0, 0);
 	if (IS_ERR(ac97)) {
 		ret = PTR_ERR(ac97);
 		dev_err(codec->dev, "Failed to register AC97 codec: %d\n", ret);
