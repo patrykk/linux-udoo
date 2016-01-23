@@ -1049,7 +1049,9 @@ static int sdma_config_channel(struct dma_chan *chan)
 		} else
 			__set_bit(sdmac->event_id0, sdmac->event_mask);
 
+		/* Watermark Level */
 		sdmac->watermark_level |= sdmac->watermark_level;
+		/* Address */
 		sdmac->shp_addr = sdmac->per_address;
 		sdmac->per_addr = sdmac->per_address2;
 */			if (sdmac->event_id0 > 31) {
@@ -1920,7 +1922,7 @@ static int sdma_probe(struct platform_device *pdev)
 	}
 
 	if (np)
-		sdma->iram_pool = of_gen_pool_get(np, "iram", 0);
+		sdma->iram_pool = of_get_named_gen_pool(np, "iram", 0);
 	if (!sdma->iram_pool)
 		dev_warn(&pdev->dev, "no iram assigned, using external mem\n");
 
