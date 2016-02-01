@@ -171,6 +171,7 @@
                            "fsl,imx-sabreauto-spdif";
                 model = "imx-spdif";
                 spdif-controller = <&spdif>;
+		spdif-out;
                 spdif-in;
                 status = "disabled";
         };
@@ -572,7 +573,8 @@
 
                 pinctrl_spdif_1: spdifgrp-1 {
                         fsl,pins = <
-                                MX6QDL_PAD_KEY_COL3__SPDIF_IN 0x1b0b0
+				MX6QDL_PAD_GPIO_19__SPDIF_OUT     0x1b0b0
+				MX6QDL_PAD_EIM_D21__SPDIF_IN      0x1b0b0
                         >;
                 };
 
