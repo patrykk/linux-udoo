@@ -279,6 +279,7 @@ config SND_SOC_IMX_AC97_VT1613
 	select SND_SOC_IMX_PCM_DMA
 	select SND_SOC_IMX_AUDMUX
 	select SND_SOC_FSL_SSI
+	select SND_PCM_TIMER
 	help
 	  Say Y if you want to add support for SoC audio on an i.MX board with
 	  a VT1613 codec in AC97 mode.
@@ -297,6 +298,7 @@ config SND_SOC_IMX_HDMI
         depends on MFD_MXC_HDMI
         select SND_SOC_IMX_HDMI_DMA
         select SND_SOC_FSL_HDMI
+	select SND_PCM_TIMER
         select SND_SOC_HDMI_CODEC
         help
           SoC Audio support for i.MX boards with HDMI audio
