@@ -8,6 +8,7 @@ Howto install:
 -----------------
 
 Configure kernel
+
     make menuconfig (or use udoo config file: make udoo_quad_defconfig)
 
 Compile kernel
