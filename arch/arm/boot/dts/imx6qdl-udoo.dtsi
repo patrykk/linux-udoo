@@ -200,8 +200,7 @@
 	
 	poweroff {
 		compatible = "udoo,poweroff";
-		sam3x_rst_gpio = <&gpio1 0 0>;
-		pwr_5v_gpio = <&gpio2 4 0>;
+		pwr_5v_gpio = <&gpio2 4 GPIO_ACTIVE_LOW>;
 	};
 	
 	codec: vt1613 {
