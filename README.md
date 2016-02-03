@@ -8,11 +8,11 @@ Howto install:
 -----------------
 
 Configure kernel
-    make menuconfig (or some other way)
+    make menuconfig (or use udoo config file: make udoo_quad_defconfig)
 
 Compile kernel
 
-    make uImage LOADADDR=0x10008000  modules
+    make zImage modules (or just: make -j5)
 
 install modules
 
@@ -20,7 +20,7 @@ install modules
 
 copy kernel file
 
-    cp arch/arm/boot/uImage /boot/
+    cp arch/arm/boot/zImage /boot/
 	
 compile dtb file
 
