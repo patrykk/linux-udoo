@@ -182,6 +182,14 @@ static const struct regmap_config fsl_ssi_regconfig = {
 	.cache_type = REGCACHE_RBTREE,
 };
 
+static const struct regmap_config fsl_ssi_regconfig_ac97 = {
+       .max_register = CCSR_SSI_SACCDIS,
+       .reg_bits = 32,
+       .val_bits = 32,
+       .reg_stride = 4,
+       .val_format_endian = REGMAP_ENDIAN_NATIVE,
+};
+
 struct fsl_ssi_soc_data {
 	bool imx;
 	bool offline_config;
@@ -1380,6 +1388,7 @@ static int fsl_ssi_probe(struct platform_device *pdev)
 	struct resource *res;
 	void __iomem *iomem;
 	char name[64];
+	const struct regmap_config *pfsl_ssi_regconfig;
 
 	of_id = of_match_device(fsl_ssi_ids, &pdev->dev);
 	if (!of_id || !of_id->data)
@@ -1397,7 +1406,7 @@ static int fsl_ssi_probe(struct platform_device *pdev)
 	sprop = of_get_property(np, "fsl,mode", NULL);
 	if (sprop) {
 		if (!strcmp(sprop, "ac97-slave"))
-			ssi_private->dai_fmt = SND_SOC_DAIFMT_AC97;
+			ssi_private->dai_fmt = SND_SOC_DAIFMT_AC97 | SND_SOC_DAIFMT_NB_NF | SND_SOC_DAIFMT_CBM_CFS;
 	}
 
 	ssi_private->use_dma = !of_property_read_bool(np,
@@ -1427,15 +1436,20 @@ static int fsl_ssi_probe(struct platform_device *pdev)
 		return PTR_ERR(iomem);
 	ssi_private->ssi_phys = res->start;
 
+	if (!fsl_ssi_is_ac97(ssi_private))
+		pfsl_ssi_regconfig = &fsl_ssi_regconfig;
+	else
+		pfsl_ssi_regconfig = &fsl_ssi_regconfig_ac97;
+
 	ret = of_property_match_string(np, "clock-names", "ipg");
 	if (ret < 0) {
 		ssi_private->has_ipg_clk_name = false;
 		ssi_private->regs = devm_regmap_init_mmio(&pdev->dev, iomem,
-			&fsl_ssi_regconfig);
+			pfsl_ssi_regconfig);
 	} else {
 		ssi_private->has_ipg_clk_name = true;
 		ssi_private->regs = devm_regmap_init_mmio_clk(&pdev->dev,
-			"ipg", iomem, &fsl_ssi_regconfig);
+			"ipg", iomem, pfsl_ssi_regconfig);
 	}
 	if (IS_ERR(ssi_private->regs)) {
 		dev_err(&pdev->dev, "Failed to init register map\n");
@@ -1471,6 +1485,12 @@ static int fsl_ssi_probe(struct platform_device *pdev)
 		ret = fsl_ssi_imx_probe(pdev, ssi_private, iomem);
 		if (ret)
 			return ret;
+	}
+
+	if (fsl_ssi_is_ac97(ssi_private)) {
+		ret = clk_prepare_enable(fsl_ac97_data->clk);
+		if (ret)
+			goto error_asoc_register;
 	}
 
 	ret = devm_snd_soc_register_component(&pdev->dev, &fsl_ssi_component,
