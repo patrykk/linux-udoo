@@ -34,6 +34,9 @@
 #include "vt1613.h"
 #define DRV_NAME "vt1613-codec"
 
+#define VT1613_VENDOR_ID 0x56494120
+#define VT1613_VENDOR_ID_MASK 0xfffffff0
+
 bool vt1613_modules_dep = true;
 
 /* TODO: S/PDIF implementation. As this driver was developed for UDOO board's needs,
@@ -123,7 +126,7 @@ static bool vt1613_writeable_reg(struct device *dev, unsigned int reg)
 }
   
 static const struct regmap_config vt1613_regmap_config = {
-	.name = "vt1613_regmap",
+  .name = "vt1613_regmap",
   .reg_bits = 16,
   .reg_stride = 2,
   .val_bits = 16,
@@ -276,27 +279,6 @@ static int vt1613_set_bias_level(struct snd_soc_codec *codec,
 	return 0;
 }
 
-static int vt1613_reset(struct snd_soc_codec *codec, int try_warm)
-{
-	struct snd_ac97 *ac97 = snd_soc_codec_get_drvdata(codec);
-
-	if (try_warm && soc_ac97_ops->warm_reset) {
-		soc_ac97_ops->warm_reset(ac97);
-		if (snd_soc_read(codec, AC97_RESET) == 0x0140)
-			return 1;
-	}
-	soc_ac97_ops->reset(ac97);
-	
-	if (soc_ac97_ops->warm_reset)
-		soc_ac97_ops->warm_reset(ac97);
-	if (snd_soc_read(codec, AC97_RESET) == 0x0140) 
-		return 0;
-
-	dev_err(codec->dev, "Failed to reset: AC97 link error\n");
-
-	return -EIO;
-}
-
 static struct snd_soc_dai_ops vt1613_dai_ops_analog = {
 	.startup = vt1613_startup,
 	.prepare = ac97_analog_prepare,
@@ -365,9 +347,11 @@ reset:
 		return -EIO;
 	}
 	ac97->bus->ops->warm_reset(ac97);
+        snd_ac97_reset(ac97, true, VT1613_VENDOR_ID, VT1613_VENDOR_ID_MASK);
+
 	id = soc_ac97_ops->read(ac97, AC97_VENDOR_ID2);
 	if (id != 0x4123) {
-		vt1613_reset(codec, 0);
+	        snd_ac97_reset(ac97, false, VT1613_VENDOR_ID, VT1613_VENDOR_ID_MASK);
 		reset++;
 		goto reset;
 	}
@@ -408,14 +392,12 @@ static int vt1613_codec_probe(struct snd_soc_codec *codec)
 
 	/* do a cold reset for the controller and then try
 	 * a warm reset followed by an optional cold reset for codec */
-	
-	vt1613_reset(codec, 0);
-	ret = vt1613_reset(codec, 1);
-	if (ret < 0) {
-		printk(KERN_ERR "Failed to reset VT1613: AC97 link error\n");
-		goto free_regmap;
-	}
-
+        snd_ac97_reset(ac97, false, VT1613_VENDOR_ID, VT1613_VENDOR_ID_MASK);
+	snd_ac97_reset(ac97, true, VT1613_VENDOR_ID, VT1613_VENDOR_ID_MASK);
+//	if (ret < 0) {
+//		printk(KERN_ERR "Failed to reset VT1613: AC97 link error %04x , %04x , %04x \n", ret, snd_soc_read(codec, AC97_VENDOR_ID1), snd_soc_read(codec, AC97_VENDOR_ID2));
+//		goto free_regmap;
+//	}
 
 	/* Read out vendor IDs */
 	printk(KERN_INFO "VT1613 SoC Audio Codec [ID = %04x - %04x]\n", 
@@ -476,17 +458,18 @@ static int vt1613_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_OF
 static const struct of_device_id vt1613_of_match[] = {
 	{ .compatible = "via,vt1613", }, 
 	{ }
 };
 MODULE_DEVICE_TABLE(of, vt1613_of_match);
+#endif
 
 static struct platform_driver vt1613_codec_driver = {
 	.driver = {
 			.name = DRV_NAME,
-			.owner = THIS_MODULE,
-			.of_match_table = vt1613_of_match,
+			.of_match_table = of_match_ptr(vt1613_of_match),
 	},
 
 	.probe = vt1613_probe,
