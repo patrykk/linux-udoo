@@ -1,54 +1,20 @@
 /****************************************************************************
 *
-*    The MIT License (MIT)
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
-*    Copyright (c) 2014 Vivante Corporation
-*
-*    Permission is hereby granted, free of charge, to any person obtaining a
-*    copy of this software and associated documentation files (the "Software"),
-*    to deal in the Software without restriction, including without limitation
-*    the rights to use, copy, modify, merge, publish, distribute, sublicense,
-*    and/or sell copies of the Software, and to permit persons to whom the
-*    Software is furnished to do so, subject to the following conditions:
-*
-*    The above copyright notice and this permission notice shall be included in
-*    all copies or substantial portions of the Software.
-*
-*    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-*    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-*    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-*    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-*    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-*    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-*    DEALINGS IN THE SOFTWARE.
-*
-*****************************************************************************
-*
-*    The GPL License (GPL)
-*
-*    Copyright (C) 2014  Vivante Corporation
-*
-*    This program is free software; you can redistribute it and/or
-*    modify it under the terms of the GNU General Public License
-*    as published by the Free Software Foundation; either version 2
-*    of the License, or (at your option) any later version.
+*    This program is free software; you can redistribute it and/or modify
+*    it under the terms of the GNU General Public License as published by
+*    the Free Software Foundation; either version 2 of the license, or
+*    (at your option) any later version.
 *
 *    This program is distributed in the hope that it will be useful,
 *    but WITHOUT ANY WARRANTY; without even the implied warranty of
-*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 *    GNU General Public License for more details.
 *
 *    You should have received a copy of the GNU General Public License
-*    along with this program; if not, write to the Free Software Foundation,
-*    Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-*
-*****************************************************************************
-*
-*    Note: This software is released under dual MIT and GPL licenses. A
-*    recipient may use this file under the terms of either the MIT license or
-*    GPL License. If you wish to use only one license not the other, you can
-*    indicate your decision by deleting one of the above license notices in your
-*    version of this file.
+*    along with this program; if not write to the Free Software
+*    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 *
 *****************************************************************************/
 
@@ -224,18 +190,18 @@ typedef enum _gceCORE
 #if gcdMULTI_GPU_AFFINITY
     gcvCORE_OCL         = 0x3,
 #endif
-#if gcdENABLE_DEC_COMPRESSION
-    gcvCORE_DEC         = 0x4,
-#endif
-    gcvCORE_COUNT
 }
 gceCORE;
 
-#define gcdMAX_GPU_COUNT               gcvCORE_COUNT
+#if gcdMULTI_GPU_AFFINITY
+#define gcdMAX_GPU_COUNT               4
+#else
+#define gcdMAX_GPU_COUNT               3
+#endif
 
-#define gcdMAX_SURF_LAYERS              4
+#define gcdMAX_SURF_LAYER              4
 
-#define gcdMAX_DRAW_BUFFERS            8
+#define gcdMAX_DRAW_BUFFERS            4
 
 /*******************************************************************************
 **
@@ -505,7 +471,7 @@ gceSTATUS
 gckOS_GetPhysicalAddress(
     IN gckOS Os,
     IN gctPOINTER Logical,
-    OUT gctPHYS_ADDR_T * Address
+    OUT gctUINT32 * Address
     );
 
 /* Get the physical address of a corresponding user logical address. */
@@ -513,7 +479,16 @@ gceSTATUS
 gckOS_UserLogicalToPhysical(
     IN gckOS Os,
     IN gctPOINTER Logical,
-    OUT gctUINT64 * Address
+    OUT gctUINT32 * Address
+    );
+
+/* Get the physical address of a corresponding logical address. */
+gceSTATUS
+gckOS_GetPhysicalAddressProcess(
+    IN gckOS Os,
+    IN gctPOINTER Logical,
+    IN gctUINT32 ProcessID,
+    OUT gctUINT32 * Address
     );
 
 /* Map physical memory. */
@@ -538,7 +513,7 @@ gceSTATUS
 gckOS_PhysicalToPhysicalAddress(
     IN gckOS Os,
     IN gctPOINTER Physical,
-    OUT gctPHYS_ADDR_T * PhysicalAddress
+    OUT gctUINT32 * PhysicalAddress
     );
 
 /* Read data from a hardware register. */
@@ -640,6 +615,13 @@ gckOS_UnmapUserLogical(
     IN gctPHYS_ADDR Physical,
     IN gctSIZE_T Bytes,
     IN gctPOINTER Logical
+    );
+
+/* Create a new mutex. */
+gceSTATUS
+gckOS_CreateMutex(
+    IN gckOS Os,
+    OUT gctPOINTER * Mutex
     );
 
 /* Delete a mutex. */
@@ -1172,20 +1154,6 @@ gckOS_WaitSignal(
     IN gctUINT32 Wait
     );
 
-#ifdef __QNXNTO__
-gceSTATUS
-gckOS_SignalPulse(
-    IN gckOS Os,
-    IN gctSIGNAL Signal
-    );
-
-gceSTATUS
-gckOS_SignalPending(
-    IN gckOS Os,
-    IN gctSIGNAL Signal
-    );
-#endif
-
 /* Map a user signal to the kernel space. */
 gceSTATUS
 gckOS_MapSignal(
@@ -1223,15 +1191,6 @@ gckOS_UnmapUserMemory(
     IN gctSIZE_T Size,
     IN gctPOINTER Info,
     IN gctUINT32 Address
-    );
-
-/* Wrap a user memory to gctPHYS_ADDR. */
-gceSTATUS
-gckOS_WrapMemory(
-    IN gckOS Os,
-    IN gcsUSER_MEMORY_DESC_PTR Desc,
-    OUT gctSIZE_T *Bytes,
-    OUT gctPHYS_ADDR * Physical
     );
 
 /******************************************************************************\
@@ -1286,14 +1245,6 @@ gckOS_CreateNativeFence(
     IN gctHANDLE Timeline,
     IN gctSYNC_POINT SyncPoint,
     OUT gctINT * FenceFD
-    );
-
-gceSTATUS
-gckOS_WaitNativeFence(
-    IN gckOS Os,
-    IN gctHANDLE Timeline,
-    IN gctINT FenceFD,
-    IN gctUINT32 Timeout
     );
 
 #if !USE_NEW_LINUX_SIGNAL
@@ -1356,7 +1307,7 @@ gckOS_CacheClean(
     gckOS Os,
     gctUINT32 ProcessID,
     gctPHYS_ADDR Handle,
-    gctPHYS_ADDR_T Physical,
+    gctUINT32 Physical,
     gctPOINTER Logical,
     gctSIZE_T Bytes
     );
@@ -1366,7 +1317,7 @@ gckOS_CacheFlush(
     gckOS Os,
     gctUINT32 ProcessID,
     gctPHYS_ADDR Handle,
-    gctPHYS_ADDR_T Physical,
+    gctUINT32 Physical,
     gctPOINTER Logical,
     gctSIZE_T Bytes
     );
@@ -1376,7 +1327,7 @@ gckOS_CacheInvalidate(
     gckOS Os,
     gctUINT32 ProcessID,
     gctPHYS_ADDR Handle,
-    gctPHYS_ADDR_T Physical,
+    gctUINT32 Physical,
     gctPOINTER Logical,
     gctSIZE_T Bytes
     );
@@ -1384,8 +1335,8 @@ gckOS_CacheInvalidate(
 gceSTATUS
 gckOS_CPUPhysicalToGPUPhysical(
     IN gckOS Os,
-    IN gctPHYS_ADDR_T CPUPhysical,
-    IN gctPHYS_ADDR_T * GPUPhysical
+    IN gctUINT32 CPUPhysical,
+    IN gctUINT32_PTR GPUPhysical
     );
 
 gceSTATUS
@@ -2134,9 +2085,7 @@ gckHARDWARE_Link(
     IN gctPOINTER Logical,
     IN gctUINT32 FetchAddress,
     IN gctUINT32 FetchSize,
-    IN OUT gctUINT32 * Bytes,
-    OUT gctUINT32 * Low,
-    OUT gctUINT32 * High
+    IN OUT gctUINT32 * Bytes
     );
 
 /* Add an EVENT command in the command queue. */
@@ -2437,17 +2386,6 @@ gckHARDWARE_SetMMUStates(
     IN gctPOINTER SafeAddress,
     IN gctPOINTER Logical,
     IN OUT gctUINT32 * Bytes
-    );
-
-gceSTATUS
-gckHARDWARE_QueryStateTimer(
-    IN gckHARDWARE Hardware,
-    OUT gctUINT64_PTR Start,
-    OUT gctUINT64_PTR End,
-    OUT gctUINT64_PTR On,
-    OUT gctUINT64_PTR Off,
-    OUT gctUINT64_PTR Idle,
-    OUT gctUINT64_PTR Suspend
     );
 
 #if !gcdENABLE_VG
@@ -2762,8 +2700,7 @@ gceSTATUS
 gckCOMMAND_Attach(
     IN gckCOMMAND Command,
     OUT gckCONTEXT * Context,
-    OUT gctSIZE_T * MaxState,
-    OUT gctUINT32 * NumStates,
+    OUT gctSIZE_T * StateCount,
     IN gctUINT32 ProcessID
     );
 
@@ -2785,7 +2722,7 @@ gceSTATUS
 gckCOMMAND_AddressInKernelCommandBuffer(
     IN gckCOMMAND Command,
     IN gctUINT32 Address,
-    OUT gctPOINTER * Pointer
+    OUT gctBOOL *In
     );
 
 /******************************************************************************\
@@ -2838,7 +2775,7 @@ gckMMU_FreePages(
 gceSTATUS
 gckMMU_SetPage(
    IN gckMMU Mmu,
-   IN gctPHYS_ADDR_T PageAddress,
+   IN gctUINT32 PageAddress,
    IN gctUINT32 *PageEntry
    );
 
@@ -2880,10 +2817,12 @@ gckHARDWARE_UpdateContextProfile(
     );
 #endif
 
+#if VIVANTE_PROFILER_NEW
 gceSTATUS
 gckHARDWARE_InitProfiler(
     IN gckHARDWARE Hardware
     );
+#endif
 
 gceSTATUS
 gckOS_SignalQueryHardware(

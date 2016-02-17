@@ -1,54 +1,20 @@
 /****************************************************************************
 *
-*    The MIT License (MIT)
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
-*    Copyright (c) 2014 Vivante Corporation
-*
-*    Permission is hereby granted, free of charge, to any person obtaining a
-*    copy of this software and associated documentation files (the "Software"),
-*    to deal in the Software without restriction, including without limitation
-*    the rights to use, copy, modify, merge, publish, distribute, sublicense,
-*    and/or sell copies of the Software, and to permit persons to whom the
-*    Software is furnished to do so, subject to the following conditions:
-*
-*    The above copyright notice and this permission notice shall be included in
-*    all copies or substantial portions of the Software.
-*
-*    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-*    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-*    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-*    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-*    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-*    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-*    DEALINGS IN THE SOFTWARE.
-*
-*****************************************************************************
-*
-*    The GPL License (GPL)
-*
-*    Copyright (C) 2014  Vivante Corporation
-*
-*    This program is free software; you can redistribute it and/or
-*    modify it under the terms of the GNU General Public License
-*    as published by the Free Software Foundation; either version 2
-*    of the License, or (at your option) any later version.
+*    This program is free software; you can redistribute it and/or modify
+*    it under the terms of the GNU General Public License as published by
+*    the Free Software Foundation; either version 2 of the license, or
+*    (at your option) any later version.
 *
 *    This program is distributed in the hope that it will be useful,
 *    but WITHOUT ANY WARRANTY; without even the implied warranty of
-*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 *    GNU General Public License for more details.
 *
 *    You should have received a copy of the GNU General Public License
-*    along with this program; if not, write to the Free Software Foundation,
-*    Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-*
-*****************************************************************************
-*
-*    Note: This software is released under dual MIT and GPL licenses. A
-*    recipient may use this file under the terms of either the MIT license or
-*    GPL License. If you wish to use only one license not the other, you can
-*    indicate your decision by deleting one of the above license notices in your
-*    version of this file.
+*    along with this program; if not write to the Free Software
+*    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 *
 *****************************************************************************/
 
@@ -58,11 +24,6 @@
 #include "gc_hal_kernel_device.h"
 #include "gc_hal_driver.h"
 #include <linux/slab.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
-#include <linux/of_platform.h>
-#include <linux/of_gpio.h>
-#include <linux/of_address.h>
-#endif
 
 #if USE_PLATFORM_DRIVER
 #   include <linux/platform_device.h>
@@ -74,11 +35,8 @@
 #include <linux/pm_runtime.h>
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
 #include <mach/busfreq.h>
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0)
-#include <linux/busfreq-imx6.h>
-#include <linux/reset.h>
 #else
-#include <linux/busfreq-imx.h>
+#include <linux/busfreq-imx6.h>
 #include <linux/reset.h>
 #endif
 #endif
@@ -220,10 +178,6 @@ static int force_contiguous_lowmem_shrink(IN gckKERNEL Kernel)
 	return ret;
 }
 
-extern gckKERNEL
-_GetValidKernel(
-  gckGALDEVICE Device
-  );
 
 gceSTATUS
 _ShrinkMemory(
@@ -238,7 +192,7 @@ _ShrinkMemory(
 
     galDevice = platform_get_drvdata(pdev);
 
-    kernel = _GetValidKernel(galDevice);
+    kernel = galDevice->kernels[gcvCORE_MAJOR];
 
     if (kernel != gcvNULL)
     {
@@ -366,7 +320,7 @@ struct imx_priv {
     struct clk         *clk_2d_axi;
     struct clk         *clk_vg_axi;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0) || LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
     /*Power management.*/
     struct regulator      *gpu_regulator;
@@ -454,8 +408,8 @@ gckPLATFORM_AdjustParam(
 
     Args->gpu3DMinClock = initgpu3DMinClock;
 
-  if(Args->physSize == 0)
-    Args->physSize = 0x40000000;
+    if (Args->physSize == 0)
+        Args->physSize = 0x40000000;
 
     return gcvSTATUS_OK;
 }
@@ -487,36 +441,6 @@ _FreePriv(
 }
 
 gceSTATUS
-_SetClock(
-    IN gckPLATFORM Platform,
-    IN gceCORE GPU,
-    IN gctBOOL Enable
-    );
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
-static void imx6sx_optimize_qosc_for_GPU(IN gckPLATFORM Platform)
-{
-	struct device_node *np;
-	void __iomem *src_base;
-
-	np = of_find_compatible_node(NULL, NULL, "fsl,imx6sx-qosc");
-	if (!np)
-		return;
-
-	src_base = of_iomap(np, 0);
-	WARN_ON(!src_base);
-    	_SetClock(Platform, gcvCORE_MAJOR, gcvTRUE);
-	writel_relaxed(0, src_base); /* Disable clkgate & soft_rst */
-	writel_relaxed(0, src_base+0x60); /* Enable all masters */
-	writel_relaxed(0, src_base+0x1400); /* Disable clkgate & soft_rst for gpu */
-	writel_relaxed(0x0f000222, src_base+0x1400+0xd0); /* Set Write QoS 2 for gpu */
-	writel_relaxed(0x0f000822, src_base+0x1400+0xe0); /* Set Read QoS 8 for gpu */
-    	_SetClock(Platform, gcvCORE_MAJOR, gcvFALSE);
-	return;
-}
-#endif
-
-gceSTATUS
 _GetPower(
     IN gckPLATFORM Platform
     )
@@ -543,7 +467,7 @@ _GetPower(
     priv->rstc[gcvCORE_VG] = IS_ERR(rstc) ? NULL : rstc;
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
     /*get gpu regulator*/
     priv->gpu_regulator = regulator_get(pdev, "cpu_vddgpu");
@@ -618,9 +542,6 @@ _GetPower(
     }
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
-    imx6sx_optimize_qosc_for_GPU(Platform);
-#endif
     return gcvSTATUS_OK;
 }
 
@@ -688,7 +609,7 @@ _SetPower(
     )
 {
     struct imx_priv* priv = Platform->priv;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0) || LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
     int ret;
 #endif
@@ -696,7 +617,7 @@ _SetPower(
 
     if (Enable)
     {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0) || LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
         if(!IS_ERR(priv->gpu_regulator)) {
             ret = regulator_enable(priv->gpu_regulator);
@@ -719,7 +640,7 @@ _SetPower(
         pm_runtime_put_sync(priv->pmdev);
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0) || LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
         if(!IS_ERR(priv->gpu_regulator))
             regulator_disable(priv->gpu_regulator);
@@ -937,8 +858,6 @@ _Reset(
     return gcvSTATUS_OK;
 }
 
-gcmkPLATFROM_Name
-
 gcsPLATFORM_OPERATIONS platformOperations = {
     .adjustParam  = gckPLATFORM_AdjustParam,
     .allocPriv    = _AllocPriv,
@@ -952,7 +871,6 @@ gcsPLATFORM_OPERATIONS platformOperations = {
 #ifdef CONFIG_GPU_LOW_MEMORY_KILLER
     .shrinkMemory = _ShrinkMemory,
 #endif
-    .name          = _Name,
 };
 
 void
