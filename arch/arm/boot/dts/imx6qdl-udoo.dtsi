@@ -16,6 +16,7 @@
 	aliases {
 		mxcfb0 = &mxcfb1;
 		reg_can_xcvr = &reg_can_xcvr;
+		mmc0 = &usdhc3;
 	};
 
         backlight {     /* could use pwm1 as backlight */
