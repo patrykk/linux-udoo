@@ -83,7 +83,7 @@ Work:
  - PWM (for inverted polarity we added small patch) 
  - SATA - on quad
  - CAN 
- - Arduino with Udoo patch (export gpio 0 and 117: "echo 0 > /sys/class/gpio/export; echo 117 > /sys/class/gpio/export")
+ - Arduino with Udoo patch (we dont need reset sam3x via gio's. Please use last a arduino-udoo and reset via BOSSAC driver)
  - gstream vpu
  - freescale camera
  - touch screen 7' and 15'
