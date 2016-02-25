@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2015 Freescale Semiconductor, Inc.
+ * Copyright (C) 2014-2015 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,14 +47,22 @@
 #include <linux/mxcfb.h>
 #include <linux/mxcfb_epdc.h>
 #include <linux/gpio.h>
+#include <linux/of_gpio.h>
+#include <linux/mfd/syscon.h>
+#include <linux/regmap.h>
 #include <linux/regulator/driver.h>
+#include <linux/mfd/max17135.h>
 #include <linux/fsl_devices.h>
 #include <linux/bitops.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_data/dma-imx.h>
 #include <asm/cacheflush.h>
 
-#include "epdc_regs.h"
+#include "epdc_v2_regs.h"
+
+#define EPDC_STANDARD_MODE
+
+#define USE_PS_AS_OUTPUT
 
 /*
  * Enable this define to have a default panel
@@ -62,6 +70,7 @@
  */
 /*#define DEFAULT_PANEL_HW_INIT*/
 
+#define SG_NUM				14 /* 2+4+4+4  */
 #define NUM_SCREENS_MIN	2
 
 #define EPDC_V1_NUM_LUTS	16
@@ -89,8 +98,8 @@
 #define MERGE_FAIL	1
 #define MERGE_BLOCK	2
 
+static u64 used_luts = 0x1;	/* do not use LUT0 */
 static unsigned long default_bpp = 16;
-static DEFINE_MUTEX(hard_lock);
 
 struct update_marker_data {
 	struct list_head full_list;
@@ -137,6 +146,7 @@ struct mxc_epdc_fb_data {
 	u32 max_pix_size;
 	ssize_t map_size;
 	dma_addr_t phys_start;
+	void *virt_start;
 	u32 fb_offset;
 	int default_bpp;
 	int native_width;
@@ -175,18 +185,27 @@ struct mxc_epdc_fb_data {
 	u8 *temp_range_bounds;
 	struct mxcfb_waveform_modes wv_modes;
 	bool wv_modes_update;
+	bool waveform_is_advanced;
 	u32 *waveform_buffer_virt;
 	u32 waveform_buffer_phys;
 	u32 waveform_buffer_size;
 	u32 *working_buffer_virt;
 	u32 working_buffer_phys;
 	u32 working_buffer_size;
+	u32 *tmp_working_buffer_virt;
+	u32 tmp_working_buffer_phys;
 	dma_addr_t *phys_addr_updbuf;
 	void **virt_addr_updbuf;
 	u32 upd_buffer_num;
 	u32 max_num_buffers;
 	dma_addr_t phys_addr_copybuf;	/* Phys address of copied update data */
 	void *virt_addr_copybuf;	/* Used for PxP SW workaround */
+	dma_addr_t phys_addr_y4;
+	void *virt_addr_y4;
+	dma_addr_t phys_addr_y4c;
+	void *virt_addr_y4c;
+	dma_addr_t phys_addr_black;
+	void *virt_addr_black;
 	u32 order_cnt;
 	struct list_head full_marker_list;
 	u32 *lut_update_order;		/* Array size = number of luts */
@@ -219,8 +238,17 @@ struct mxc_epdc_fb_data {
 	struct pxp_config_data pxp_conf;
 	struct dma_async_tx_descriptor *txd;
 	dma_cookie_t cookie;
-	struct scatterlist sg[2];
+	struct scatterlist sg[SG_NUM];
 	struct mutex pxp_mutex; /* protects access to PxP */
+
+	/* external mode or internal mode */
+	int epdc_wb_mode;
+	struct pxp_collision_info col_info;
+	u32 hist_status;
+
+	struct regmap *gpr;
+	u8 req_gpr;
+	u8 req_bit;
 };
 
 struct waveform_data_header {
@@ -252,6 +280,25 @@ struct waveform_data_header {
 struct mxcfb_waveform_data_file {
 	struct waveform_data_header wdh;
 	u32 *data;	/* Temperature Range Table + Waveform Data */
+};
+
+#define WAVEFORM_HDR_LUT_ADVANCED_ALGO_MASK 0xc
+
+static struct fb_videomode ed060xh2c1mode = {
+	.name = "ED060XH2C1",
+	.refresh = 85,
+	.xres = 1024,
+	.yres = 758,
+	.pixclock = 40000000,
+	.left_margin = 12,
+	.right_margin = 76,
+	.upper_margin = 4,
+	.lower_margin = 5,
+	.hsync_len = 12,
+	.vsync_len = 2,
+	.sync = 0,
+	.vmode = FB_VMODE_NONINTERLACED,
+	.flag = 0,
 };
 
 static struct fb_videomode e60_v110_mode = {
@@ -324,6 +371,19 @@ static struct fb_videomode e97_v110_mode = {
 
 static struct imx_epdc_fb_mode panel_modes[] = {
 	{
+		&ed060xh2c1mode,	/* struct fb_videomode *mode */
+		4, 	/* vscan_holdoff */
+		10, 	/* sdoed_width */
+		20, 	/* sdoed_delay */
+		10, 	/* sdoez_width */
+		20, 	/* sdoez_delay */
+		524, 	/* GDCLK_HP */
+		327, 	/* GDSP_OFF */
+		0, 	/* GDOE_OFF */
+		19, 	/* gdclk_offs */
+		1, 	/* num_ce */
+	},
+	{
 		&e60_v110_mode,
 		4,      /* vscan_holdoff */
 		10,     /* sdoed_width */
@@ -357,7 +417,7 @@ static struct imx_epdc_fb_mode panel_modes[] = {
 		10,     /* sdoez_width */
 		20,     /* sdoez_delay */
 		419,    /* gdclk_hp_offs */
-		20,     /* gdsp_offs */
+		263,     /* gdsp_offs */
 		0,      /* gdoe_offs */
 		5,      /* gdclk_offs */
 		1,      /* num_ce */
@@ -382,9 +442,9 @@ static struct imx_epdc_fb_platform_data epdc_data = {
 	.num_modes = ARRAY_SIZE(panel_modes),
 };
 
-void __iomem *epdc_base;
+void __iomem *epdc_v2_base;
 
-struct mxc_epdc_fb_data *g_fb_data;
+static struct mxc_epdc_fb_data *g_fb_data;
 
 /* forward declaration */
 static int mxc_epdc_fb_get_temp_index(struct mxc_epdc_fb_data *fb_data,
@@ -392,9 +452,18 @@ static int mxc_epdc_fb_get_temp_index(struct mxc_epdc_fb_data *fb_data,
 static void mxc_epdc_fb_flush_updates(struct mxc_epdc_fb_data *fb_data);
 static int mxc_epdc_fb_blank(int blank, struct fb_info *info);
 static int mxc_epdc_fb_init_hw(struct fb_info *info);
-static int pxp_process_update(struct mxc_epdc_fb_data *fb_data,
+static int pxp_legacy_process(struct mxc_epdc_fb_data *fb_data,
 			      u32 src_width, u32 src_height,
 			      struct mxcfb_rect *update_region);
+static int pxp_process_dithering(struct mxc_epdc_fb_data *fb_data,
+			      struct mxcfb_rect *update_region);
+static int pxp_wfe_a_process(struct mxc_epdc_fb_data *fb_data,
+			     struct mxcfb_rect *update_region,
+			     struct update_data_list *upd_data_list);
+static int pxp_wfe_b_process_update(struct mxc_epdc_fb_data *fb_data,
+			      struct mxcfb_rect *update_region);
+static int pxp_wfe_b_process_clear_workingbuffer(struct mxc_epdc_fb_data *fb_data,
+			      u32 src_width, u32 src_height);
 static int pxp_complete_update(struct mxc_epdc_fb_data *fb_data, u32 *hist_stat);
 
 static void draw_mode0(struct mxc_epdc_fb_data *fb_data);
@@ -410,6 +479,13 @@ static void do_dithering_processing_Y4_v1_0(
 		struct mxcfb_rect *update_region,
 		unsigned long update_region_stride,
 		int *err_dist);
+static inline void epdc_set_used_lut(u64 used_bit);
+static inline void epdc_reset_used_lut(void);
+static int pxp_clear_wb_work_func(struct mxc_epdc_fb_data *fb_data);
+static int epdc_working_buffer_update(struct mxc_epdc_fb_data *fb_data,
+				      struct update_data_list *upd_data_list,
+				      struct mxcfb_rect *update_region);
+extern void pxp_get_collision_info(struct pxp_collision_info *info);
 
 #ifdef DEBUG
 static void dump_pxp_config(struct mxc_epdc_fb_data *fb_data,
@@ -621,6 +697,36 @@ static void dump_all_updates(struct mxc_epdc_fb_data *fb_data)
 	else
 		dump_update_data(fb_data->dev, fb_data->cur_update);
 }
+
+static void dump_fw_header(struct device *dev,
+			   struct mxcfb_waveform_data_file *fw)
+{
+	dev_dbg(dev, "Firmware Header:\n");
+	dev_dbg(dev, "wi0         0x%08x\n", fw->wdh.wi0);
+	dev_dbg(dev, "wi1         0x%08x\n", fw->wdh.wi1);
+	dev_dbg(dev, "wi2         0x%08x\n", fw->wdh.wi2);
+	dev_dbg(dev, "wi3         0x%08x\n", fw->wdh.wi3);
+	dev_dbg(dev, "wi4         0x%08x\n", fw->wdh.wi4);
+	dev_dbg(dev, "wi5         0x%08x\n", fw->wdh.wi5);
+	dev_dbg(dev, "wi6         0x%08x\n", fw->wdh.wi6);
+	dev_dbg(dev, "xwia:24     0x%06x\n", fw->wdh.xwia);
+	dev_dbg(dev, "cs1:8       0x%02x\n", fw->wdh.cs1);
+	dev_dbg(dev, "wmta:24     0x%06x\n", fw->wdh.wmta);
+	dev_dbg(dev, "fvsn:8      0x%02x\n", fw->wdh.fvsn);
+	dev_dbg(dev, "luts:8      0x%02x\n", fw->wdh.luts);
+	dev_dbg(dev, "mc:8        0x%02x\n", fw->wdh.mc);
+	dev_dbg(dev, "trc:8       0x%02x\n", fw->wdh.trc);
+	dev_dbg(dev, "reserved0_0 0x%02x\n", fw->wdh.reserved0_0);
+	dev_dbg(dev, "eb:8        0x%02x\n", fw->wdh.eb);
+	dev_dbg(dev, "sb:8        0x%02x\n", fw->wdh.sb);
+	dev_dbg(dev, "reserved0_1 0x%02x\n", fw->wdh.reserved0_1);
+	dev_dbg(dev, "reserved0_2 0x%02x\n", fw->wdh.reserved0_2);
+	dev_dbg(dev, "reserved0_3 0x%02x\n", fw->wdh.reserved0_3);
+	dev_dbg(dev, "reserved0_4 0x%02x\n", fw->wdh.reserved0_4);
+	dev_dbg(dev, "reserved0_5 0x%02x\n", fw->wdh.reserved0_5);
+	dev_dbg(dev, "cs2:8       0x%02x\n", fw->wdh.cs2);
+}
+
 #else
 static inline void dump_pxp_config(struct mxc_epdc_fb_data *fb_data,
 				   struct pxp_config_data *pxp_conf) {}
@@ -631,6 +737,8 @@ static inline void dump_collision_list(struct mxc_epdc_fb_data *fb_data) {}
 static inline void dump_free_list(struct mxc_epdc_fb_data *fb_data) {}
 static inline void dump_queue(struct mxc_epdc_fb_data *fb_data) {}
 static inline void dump_all_updates(struct mxc_epdc_fb_data *fb_data) {}
+static void dump_fw_header(struct device *dev,
+			   struct mxcfb_waveform_data_file *fw) {}
 
 #endif
 
@@ -699,7 +807,21 @@ static inline bool epdc_signal_eof(void)
 
 static inline void epdc_set_temp(u32 temp)
 {
-	__raw_writel(temp, EPDC_TEMP);
+	int ret = 0;
+	/* used to store external panel temperature value */
+	unsigned int ext_temp, ext_temp_index = temp;
+
+	if (temp == DEFAULT_TEMP_INDEX) {
+		ret = max17135_reg_read(REG_MAX17135_EXT_TEMP, &ext_temp);
+		if (ret == 0) {
+			ext_temp = ext_temp >> 8;
+			dev_dbg(g_fb_data->dev, "the current external temperature is %d\n",
+				ext_temp);
+			ext_temp_index = mxc_epdc_fb_get_temp_index(g_fb_data, ext_temp);
+		}
+	}
+
+	__raw_writel(ext_temp_index, EPDC_TEMP);
 }
 
 static inline void epdc_set_screen_res(u32 width, u32 height)
@@ -710,7 +832,11 @@ static inline void epdc_set_screen_res(u32 width, u32 height)
 
 static inline void epdc_set_update_addr(u32 addr)
 {
+#ifdef	EPDC_STANDARD_MODE
+	__raw_writel(0, EPDC_UPD_ADDR);
+#else
 	__raw_writel(addr, EPDC_UPD_ADDR);
+#endif
 }
 
 static inline void epdc_set_update_coord(u32 x, u32 y)
@@ -728,6 +854,10 @@ static inline void epdc_set_update_dimensions(u32 width, u32 height)
 static void epdc_set_update_waveform(struct mxcfb_waveform_modes *wv_modes)
 {
 	u32 val;
+
+#ifdef EPDC_STANDARD_MODE
+	return;
+#endif
 
 	/* Configure the auto-waveform look-up table based on waveform modes */
 
@@ -754,7 +884,11 @@ static void epdc_set_update_waveform(struct mxcfb_waveform_modes *wv_modes)
 
 static void epdc_set_update_stride(u32 stride)
 {
+#ifdef EPDC_STANDARD_MODE
+	__raw_writel(0, EPDC_UPD_STRIDE);
+#else
 	__raw_writel(stride, EPDC_UPD_STRIDE);
+#endif
 }
 
 static void epdc_submit_update(u32 lut_num, u32 waveform_mode, u32 update_mode,
@@ -766,6 +900,9 @@ static void epdc_submit_update(u32 lut_num, u32 waveform_mode, u32 update_mode,
 		reg_val |=
 		    ((np_val << EPDC_UPD_FIXED_FIXNP_OFFSET) &
 		     EPDC_UPD_FIXED_FIXNP_MASK) | EPDC_UPD_FIXED_FIXNP_EN;
+		reg_val |=
+		    ((np_val << EPDC_UPD_FIXED_FIXCP_OFFSET) &
+		     EPDC_UPD_FIXED_FIXCP_MASK) | EPDC_UPD_FIXED_FIXCP_EN;
 
 		__raw_writel(reg_val, EPDC_UPD_FIXED);
 
@@ -786,6 +923,12 @@ static void epdc_submit_update(u32 lut_num, u32 waveform_mode, u32 update_mode,
 	     EPDC_UPD_CTRL_LUT_SEL_MASK) |
 	    update_mode;
 
+#ifdef EPDC_STANDARD_MODE
+	reg_val |= 0x80000000;
+
+	epdc_set_used_lut(lut_num);
+#endif
+	dump_epdc_reg();
 	__raw_writel(reg_val, EPDC_UPD_CTRL);
 }
 
@@ -846,12 +989,29 @@ static inline bool epdc_any_luts_active(int rev)
 	return any_active;
 }
 
+static inline bool epdc_any_luts_real_available(void)
+{
+	if ((__raw_readl(EPDC_STATUS_LUTS) != 0xfffffffe) ||
+		(__raw_readl(EPDC_STATUS_LUTS2) != ~0UL))
+		return true;
+	else
+		return false;
+}
+
+
 static inline bool epdc_any_luts_available(void)
 {
+#ifdef EPDC_STANDARD_MODE
+	if (((u32)used_luts != ~0UL) || ((u32)(used_luts >> 32) != ~0UL))
+		return 1;
+	else
+		return 0;
+#else
 	bool luts_available =
 	    (__raw_readl(EPDC_STATUS_NEXTLUT) &
 	     EPDC_STATUS_NEXTLUT_NEXT_LUT_VALID) ? true : false;
 	return luts_available;
+#endif
 }
 
 static inline int epdc_get_next_lut(void)
@@ -862,7 +1022,41 @@ static inline int epdc_get_next_lut(void)
 	return val;
 }
 
-static int epdc_choose_next_lut(int rev, int *next_lut)
+static inline void epdc_set_used_lut(u64 used_bit)
+{
+	used_luts |= (u64)1 << used_bit;
+}
+
+static inline void epdc_reset_used_lut(void)
+{
+	used_luts = 0x1;
+}
+
+#ifdef EPDC_STANDARD_MODE
+/*
+ * When all the 63 LUT are all marked as USED, a clean-up operation is required
+ * to the working buffer. The cleanup operation can only be initiated when all
+ * the LUT are at IDLE state on the EPDC. During the cleanup, none of the LUT
+ * should not be activated on the EPDC.
+ */
+static int epdc_choose_next_lut(struct mxc_epdc_fb_data *fb_data, int *next_lut)
+{
+	while (!epdc_any_luts_available()) {
+
+		while (epdc_any_luts_active(fb_data->rev))
+				;
+		pxp_clear_wb_work_func(fb_data);
+	}
+
+	if ((u32)used_luts != ~0UL)
+		*next_lut = ffz((u32)used_luts);
+	else if ((u32)(used_luts >> 32) != ~0UL)
+		*next_lut = ffz((u32)(used_luts >> 32)) + 32;
+
+	return 0;
+}
+#else
+static int epdc_choose_next_lut(struct mxc_epdc_fb_data *fb_data, int *next_lut)
 {
 	u64 luts_status, unprocessed_luts, used_luts;
 	/* Available LUTs are reduced to 16 in 5-bit waveform mode */
@@ -871,12 +1065,12 @@ static int epdc_choose_next_lut(int rev, int *next_lut)
 	EPDC_FORMAT_BUF_PIXEL_FORMAT_P5N);
 
 	luts_status = __raw_readl(EPDC_STATUS_LUTS);
-	if ((rev < 20) || format_p5n)
+	if ((fb_data->rev < 20) || format_p5n)
 		luts_status &= 0xFFFF;
 	else
 		luts_status |= ((u64)__raw_readl(EPDC_STATUS_LUTS2) << 32);
 
-	if (rev < 20) {
+	if (fb_data->rev < 20) {
 		unprocessed_luts = __raw_readl(EPDC_IRQ) & 0xFFFF;
 	} else {
 		unprocessed_luts = __raw_readl(EPDC_IRQ1) |
@@ -908,7 +1102,7 @@ static int epdc_choose_next_lut(int rev, int *next_lut)
 	 *       bug is fixed, so it doesn't matter which LUT is used.
 	 */
 
-	if ((rev < 20) || format_p5n) {
+	if ((fb_data->rev < 20) || format_p5n) {
 		*next_lut = fls64(used_luts);
 		if (*next_lut > 15)
 			*next_lut = ffz(used_luts);
@@ -926,6 +1120,7 @@ static int epdc_choose_next_lut(int rev, int *next_lut)
 	else
 		return 0;
 }
+#endif
 
 static inline bool epdc_is_working_buffer_busy(void)
 {
@@ -1002,7 +1197,12 @@ static void epdc_init_settings(struct mxc_epdc_fb_data *fb_data)
 	struct fb_var_screeninfo *screeninfo = &fb_data->epdc_fb_var;
 	u32 reg_val;
 	int num_ce;
+#ifndef EPDC_STANDARD_MODE
 	int i;
+#endif
+	int j;
+	unsigned short *wk_p;
+	unsigned char *bb_p;
 
 	/* Enable clocks to access EPDC regs */
 	clk_prepare_enable(fb_data->epdc_clk_axi);
@@ -1022,17 +1222,40 @@ static void epdc_init_settings(struct mxc_epdc_fb_data *fb_data)
 	/* EPDC_CTRL */
 	reg_val = __raw_readl(EPDC_CTRL);
 	reg_val &= ~EPDC_CTRL_UPD_DATA_SWIZZLE_MASK;
+#ifdef	EPDC_STANDARD_MODE
+	reg_val |= EPDC_CTRL_UPD_DATA_SWIZZLE_ALL_BYTES_SWAP;
+#else
 	reg_val |= EPDC_CTRL_UPD_DATA_SWIZZLE_NO_SWAP;
+#endif
 	reg_val &= ~EPDC_CTRL_LUT_DATA_SWIZZLE_MASK;
 	reg_val |= EPDC_CTRL_LUT_DATA_SWIZZLE_NO_SWAP;
 	__raw_writel(reg_val, EPDC_CTRL_SET);
 
 	/* EPDC_FORMAT - 2bit TFT and 4bit Buf pixel format */
 	reg_val = EPDC_FORMAT_TFT_PIXEL_FORMAT_2BIT
+#ifdef	EPDC_STANDARD_MODE
+	    | EPDC_FORMAT_WB_TYPE_WB_EXTERNAL16
+#endif
 	    | EPDC_FORMAT_BUF_PIXEL_FORMAT_P4N
 	    | ((0x0 << EPDC_FORMAT_DEFAULT_TFT_PIXEL_OFFSET) &
 	       EPDC_FORMAT_DEFAULT_TFT_PIXEL_MASK);
 	__raw_writel(reg_val, EPDC_FORMAT);
+
+#ifdef	EPDC_STANDARD_MODE
+	reg_val = 0;
+	if (fb_data->waveform_is_advanced) {
+		reg_val =
+		    ((EPDC_WB_FIELD_USAGE_PTS << EPDC_WB_FIELD_USAGE_OFFSET) &
+		      EPDC_WB_FIELD_USAGE_MASK)
+		    | ((0x8 << EPDC_WB_FIELD_FROM_OFFSET) &
+		      EPDC_WB_FIELD_FROM_MASK)
+		    | ((0x8 << EPDC_WB_FIELD_TO_OFFSET) &
+		      EPDC_WB_FIELD_TO_MASK)
+		    | ((0x1 << EPDC_WB_FIELD_LEN_OFFSET) &
+		      EPDC_WB_FIELD_LEN_MASK);
+	}
+	__raw_writel(reg_val, EPDC_WB_FIELD3);
+#endif
 
 	/* EPDC_FIFOCTRL (disabled) */
 	reg_val =
@@ -1050,11 +1273,13 @@ static void epdc_init_settings(struct mxc_epdc_fb_data *fb_data)
 	/* EPDC_RES */
 	epdc_set_screen_res(epdc_mode->vmode->xres, epdc_mode->vmode->yres);
 
+#ifndef EPDC_STANDARD_MODE
 	/* EPDC_AUTOWV_LUT */
 	/* Initialize all auto-wavefrom look-up values to 2 - GC16 */
 	for (i = 0; i < 8; i++)
 		__raw_writel((2 << EPDC_AUTOWV_LUT_DATA_OFFSET) |
 			(i << EPDC_AUTOWV_LUT_ADDR_OFFSET), EPDC_AUTOWV_LUT);
+#endif
 
 	/*
 	 * EPDC_TCE_CTRL
@@ -1175,6 +1400,18 @@ static void epdc_init_settings(struct mxc_epdc_fb_data *fb_data)
 	__raw_writel(fb_data->working_buffer_phys, EPDC_WB_ADDR);
 	__raw_writel(fb_data->working_buffer_phys, EPDC_WB_ADDR_TCE);
 
+	wk_p = (unsigned short *)fb_data->working_buffer_virt;
+	for (j = 0; j < fb_data->cur_mode->vmode->xres * fb_data->cur_mode->vmode->yres; j++) {
+		*wk_p = 0x00F0;
+		wk_p++;
+	}
+
+	bb_p = (unsigned char *)fb_data->virt_addr_black;
+	for (j = 0; j < fb_data->cur_mode->vmode->xres * fb_data->cur_mode->vmode->yres; j++) {
+		*bb_p = 0x0;
+		bb_p++;
+	}
+
 	/* Disable clock */
 	clk_disable_unprepare(fb_data->epdc_clk_axi);
 	clk_disable_unprepare(fb_data->epdc_clk_pix);
@@ -1285,6 +1522,7 @@ static void epdc_init_sequence(struct mxc_epdc_fb_data *fb_data)
 {
 	/* Initialize EPDC, passing pointer to EPDC registers */
 	epdc_init_settings(fb_data);
+
 	fb_data->in_init = true;
 	epdc_powerup(fb_data);
 	draw_mode0(fb_data);
@@ -1844,9 +2082,8 @@ void mxc_epdc_fb_set_waveform_modes(struct mxcfb_waveform_modes *modes,
 
 	mutex_unlock(&fb_data->queue_mutex);
 }
-EXPORT_SYMBOL(mxc_epdc_fb_set_waveform_modes);
 
-static int mxc_epdc_fb_get_temp_index(struct mxc_epdc_fb_data *fb_data, int temp)
+int mxc_epdc_fb_get_temp_index(struct mxc_epdc_fb_data *fb_data, int temp)
 {
 	int i;
 	int index = -1;
@@ -1889,7 +2126,6 @@ int mxc_epdc_fb_set_temperature(int temperature, struct fb_info *info)
 
 	return 0;
 }
-EXPORT_SYMBOL(mxc_epdc_fb_set_temperature);
 
 int mxc_epdc_fb_set_auto_update(u32 auto_mode, struct fb_info *info)
 {
@@ -1908,7 +2144,6 @@ int mxc_epdc_fb_set_auto_update(u32 auto_mode, struct fb_info *info)
 
 	return 0;
 }
-EXPORT_SYMBOL(mxc_epdc_fb_set_auto_update);
 
 int mxc_epdc_fb_set_upd_scheme(u32 upd_scheme, struct fb_info *info)
 {
@@ -1934,9 +2169,8 @@ int mxc_epdc_fb_set_upd_scheme(u32 upd_scheme, struct fb_info *info)
 
 	return 0;
 }
-EXPORT_SYMBOL(mxc_epdc_fb_set_upd_scheme);
 
-static void copy_before_process(struct mxc_epdc_fb_data *fb_data,
+void copy_before_process(struct mxc_epdc_fb_data *fb_data,
 	struct update_data_list *upd_data_list)
 {
 	struct mxcfb_update_data *upd_data =
@@ -1996,6 +2230,104 @@ static void copy_before_process(struct mxc_epdc_fb_data *fb_data,
 			ALIGN(src_upd_region->width, 8) * bpp/8;
 		memset(temp_buf_ptr, 0x0, y_trailing_bytes);
 	}
+}
+
+/* Before every update to panel, we should call this
+ * function to update the working buffer first.
+ */
+static int epdc_working_buffer_update(struct mxc_epdc_fb_data *fb_data,
+				      struct update_data_list *upd_data_list,
+				      struct mxcfb_rect *update_region)
+{
+	struct pxp_proc_data *proc_data = &fb_data->pxp_conf.proc_data;
+	u32 wv_mode = upd_data_list->update_desc->upd_data.waveform_mode;
+	int ret = 0;
+	u32 hist_stat;
+	struct update_desc_list *upd_desc_list;
+
+	ret = pxp_wfe_a_process(fb_data, update_region, upd_data_list);
+	if (ret) {
+		dev_err(fb_data->dev, "Unable to submit PxP update task.\n");
+		mutex_unlock(&fb_data->pxp_mutex);
+		return ret;
+	}
+
+	/* If needed, enable EPDC HW while ePxP is processing */
+	if ((fb_data->power_state == POWER_STATE_OFF)
+		|| fb_data->powering_down) {
+		epdc_powerup(fb_data);
+	}
+
+	/* This is a blocking call, so upon return PxP tx should be done */
+	ret = pxp_complete_update(fb_data, &fb_data->hist_status);
+	if (ret) {
+		dev_err(fb_data->dev, "Unable to complete PxP update task: main process\n");
+		return ret;
+	}
+
+	upd_desc_list = upd_data_list->update_desc;
+	if (fb_data->epdc_wb_mode &&
+		(upd_desc_list->upd_data.waveform_mode == WAVEFORM_MODE_AUTO)) {
+		hist_stat = fb_data->hist_status;
+
+		if (hist_stat & 0x1)
+			upd_desc_list->upd_data.waveform_mode =
+				fb_data->wv_modes.mode_du;
+		else if (hist_stat & 0x2)
+			upd_desc_list->upd_data.waveform_mode =
+				fb_data->wv_modes.mode_gc4;
+		else if (hist_stat & 0x4)
+			upd_desc_list->upd_data.waveform_mode =
+				fb_data->wv_modes.mode_gc8;
+		else if (hist_stat & 0x8)
+			upd_desc_list->upd_data.waveform_mode =
+				fb_data->wv_modes.mode_gc16;
+		else
+			upd_desc_list->upd_data.waveform_mode =
+				fb_data->wv_modes.mode_gc32;
+
+		dev_dbg(fb_data->dev, "hist_stat = 0x%x, new waveform = 0x%x\n",
+			hist_stat, upd_desc_list->upd_data.waveform_mode);
+	}
+
+	if (proc_data->detection_only == 1) {
+		dev_dbg(fb_data->dev, "collision detection only, no real update\n");
+		return 0;
+	}
+
+	if (fb_data->col_info.pixel_cnt) {
+		dev_dbg(fb_data->dev, "collision detected, can not do REAGl/-D\n");
+		return 0;
+	}
+
+	/* for REAGL/-D Processing */
+	if (wv_mode == WAVEFORM_MODE_GLR16
+	 || wv_mode == WAVEFORM_MODE_GLD16) {
+		/* This is a blocking call, so upon return PxP tx should be done */
+		ret = pxp_wfe_b_process_update(fb_data, update_region);
+		if (ret) {
+			dev_err(fb_data->dev, "Unable to submit PxP update task.\n");
+			mutex_unlock(&fb_data->pxp_mutex);
+			return ret;
+		}
+
+		/* If needed, enable EPDC HW while ePxP is processing */
+		if ((fb_data->power_state == POWER_STATE_OFF)
+			|| fb_data->powering_down) {
+			epdc_powerup(fb_data);
+		}
+
+		/* This is a blocking call, so upon return PxP tx should be done */
+		ret = pxp_complete_update(fb_data, &hist_stat);
+		if (ret) {
+			dev_err(fb_data->dev, "Unable to complete PxP update task: reagl/-d process\n");
+			mutex_unlock(&fb_data->pxp_mutex);
+			return ret;
+		}
+
+	}
+
+	return 0;
 }
 
 static int epdc_process_update(struct update_data_list *upd_data_list,
@@ -2241,8 +2573,9 @@ static int epdc_process_update(struct update_data_list *upd_data_list,
 	if (fb_data->epdc_fb_var.grayscale == GRAYSCALE_8BIT_INVERTED)
 		fb_data->pxp_conf.proc_data.lut_transform ^= PXP_LUT_INVERT;
 
+#ifdef	USE_PS_AS_OUTPUT
 	/* This is a blocking call, so upon return PxP tx should be done */
-	ret = pxp_process_update(fb_data, src_width, src_height,
+	ret = pxp_legacy_process(fb_data, src_width, src_height,
 		&pxp_upd_region);
 	if (ret) {
 		dev_err(fb_data->dev, "Unable to submit PxP update task.\n");
@@ -2259,10 +2592,48 @@ static int epdc_process_update(struct update_data_list *upd_data_list,
 	/* This is a blocking call, so upon return PxP tx should be done */
 	ret = pxp_complete_update(fb_data, &hist_stat);
 	if (ret) {
-		dev_err(fb_data->dev, "Unable to complete PxP update task.\n");
+		dev_err(fb_data->dev, "Unable to complete PxP update task: pre_prcoess.\n");
 		mutex_unlock(&fb_data->pxp_mutex);
 		return ret;
 	}
+#endif
+	pr_debug(" upd_data.dither_mode %d  \n", upd_desc_list->upd_data.dither_mode);
+	fb_data->pxp_conf.proc_data.dither_mode = 0;
+
+	/* Dithering */
+	if ((EPDC_FLAG_USE_DITHERING_PASSTHROUGH < upd_desc_list->upd_data.dither_mode) &&
+		(upd_desc_list->upd_data.dither_mode < EPDC_FLAG_USE_DITHERING_MAX)) {
+
+		fb_data->pxp_conf.proc_data.dither_mode = upd_desc_list->upd_data.dither_mode;
+		fb_data->pxp_conf.proc_data.quant_bit = upd_desc_list->upd_data.quant_bit;
+
+		/* This is a blocking call, so upon return PxP tx should be done */
+		ret = pxp_process_dithering(fb_data, &pxp_upd_region);
+		if (ret) {
+			dev_err(fb_data->dev, "Unable to submit PxP update task.\n");
+			mutex_unlock(&fb_data->pxp_mutex);
+			return ret;
+		}
+
+		/* If needed, enable EPDC HW while ePxP is processing */
+		if ((fb_data->power_state == POWER_STATE_OFF)
+			|| fb_data->powering_down) {
+			epdc_powerup(fb_data);
+		}
+
+		/* This is a blocking call, so upon return PxP tx should be done */
+		ret = pxp_complete_update(fb_data, &hist_stat);
+		if (ret) {
+			dev_err(fb_data->dev, "Unable to complete PxP update task: dithering process\n");
+			mutex_unlock(&fb_data->pxp_mutex);
+			return ret;
+		}
+
+	}
+
+	/* Regal D Processing */
+	fb_data->pxp_conf.proc_data.reagl_d_en =
+		(upd_desc_list->upd_data.waveform_mode == WAVEFORM_MODE_GLD16);
 
 	mutex_unlock(&fb_data->pxp_mutex);
 
@@ -2547,10 +2918,13 @@ static void epdc_submit_work_func(struct work_struct *work)
 		EPDC_FLAG_USE_DITHERING_Y4 | EPDC_FLAG_FORCE_MONOCHROME |
 		EPDC_FLAG_USE_CMAP) ? true : false;
 
+	/*XXX if we use external mode, we should first use pxp
+	 * to update upd buffer data to working buffer first.
+	 */
 	if ((fb_data->epdc_fb_var.rotate == FB_ROTATE_UR) &&
 		(fb_data->epdc_fb_var.grayscale == GRAYSCALE_8BIT) &&
 		!is_transform && (fb_data->rev > 20) &&
-		!fb_data->restrict_width) {
+		!fb_data->restrict_width && !fb_data->epdc_wb_mode) {
 
 		/* If needed, enable EPDC HW while ePxP is processing */
 		if ((fb_data->power_state == POWER_STATE_OFF)
@@ -2673,21 +3047,27 @@ static void epdc_submit_work_func(struct work_struct *work)
 	 * then we must wait for the resource to become free.
 	 * The IST will signal this event.
 	 */
-	if (!epdc_any_luts_available()) {
-		dev_dbg(fb_data->dev, "no luts available!\n");
+	{
+		bool luts_available;
 
-		/* Initialize event signalling an update resource is free */
-		init_completion(&fb_data->update_res_free);
+		luts_available = fb_data->epdc_wb_mode ? epdc_any_luts_real_available() :
+							 epdc_any_luts_available();
+		if (!luts_available) {
+			dev_dbg(fb_data->dev, "no luts available!\n");
 
-		fb_data->waiting_for_lut = true;
+			/* Initialize event signalling an update resource is free */
+			init_completion(&fb_data->update_res_free);
 
-		/* Leave spinlock while waiting for LUT to free up */
-		mutex_unlock(&fb_data->queue_mutex);
-		wait_for_completion(&fb_data->update_res_free);
-		mutex_lock(&fb_data->queue_mutex);
+			fb_data->waiting_for_lut = true;
+
+			/* Leave spinlock while waiting for LUT to free up */
+			mutex_unlock(&fb_data->queue_mutex);
+			wait_for_completion(&fb_data->update_res_free);
+			mutex_lock(&fb_data->queue_mutex);
+		}
 	}
 
-	ret = epdc_choose_next_lut(fb_data->rev, &upd_data_list->lut_num);
+	ret = epdc_choose_next_lut(fb_data, &upd_data_list->lut_num);
 	/*
 	 * If LUT15 is in use (for pre-EPDC v2.0 hardware):
 	 *   - Wait for LUT15 to complete is if TCE underrun prevent is enabled
@@ -2706,7 +3086,7 @@ static void epdc_submit_work_func(struct work_struct *work)
 		wait_for_completion(&fb_data->lut15_free);
 		mutex_lock(&fb_data->queue_mutex);
 
-		epdc_choose_next_lut(fb_data->rev, &upd_data_list->lut_num);
+		epdc_choose_next_lut(fb_data, &upd_data_list->lut_num);
 	} else if (ret && (fb_data->rev < 20)) {
 		/* Synchronize update submission time to reduce
 		   chances of TCE underrun */
@@ -2753,6 +3133,11 @@ static void epdc_submit_work_func(struct work_struct *work)
 	/* Enable Collision and WB complete IRQs */
 	epdc_working_buf_intr(true);
 
+	/* add working buffer update here for external mode */
+	if (fb_data->epdc_wb_mode)
+		ret = epdc_working_buffer_update(fb_data, upd_data_list,
+				&adj_update_region);
+
 	/* Program EPDC update to process buffer */
 	if (upd_data_list->update_desc->upd_data.temp != TEMP_USE_AMBIENT) {
 		temp_index = mxc_epdc_fb_get_temp_index(fb_data,
@@ -2760,6 +3145,7 @@ static void epdc_submit_work_func(struct work_struct *work)
 		epdc_set_temp(temp_index);
 	} else
 		epdc_set_temp(fb_data->temp_index);
+
 	epdc_set_update_addr(update_addr);
 	epdc_set_update_coord(adj_update_region.left, adj_update_region.top);
 	epdc_set_update_dimensions(adj_update_region.width,
@@ -2821,18 +3207,17 @@ static int mxc_epdc_fb_send_single_update(struct mxcfb_update_data *upd_data,
 			upd_data->waveform_mode);
 		return -EINVAL;
 	}
-
-	mutex_lock(&fb_data->queue_mutex);
-	if ((upd_data->update_region.left + upd_data->update_region.width > fb_data->epdc_fb_var.xres) ||
+	if ((upd_data->update_region.left >= fb_data->epdc_fb_var.xres) ||
+		(upd_data->update_region.top >= fb_data->epdc_fb_var.yres) ||
+		(upd_data->update_region.width > fb_data->epdc_fb_var.xres) ||
+		(upd_data->update_region.height > fb_data->epdc_fb_var.yres) ||
+		(upd_data->update_region.left + upd_data->update_region.width > fb_data->epdc_fb_var.xres) ||
 		(upd_data->update_region.top + upd_data->update_region.height > fb_data->epdc_fb_var.yres)) {
-		mutex_unlock(&fb_data->queue_mutex);
 		dev_err(fb_data->dev,
 			"Update region is outside bounds of framebuffer."
 			"Aborting update.\n");
 		return -EINVAL;
 	}
-	mutex_unlock(&fb_data->queue_mutex);
-
 	if (upd_data->flags & EPDC_FLAG_USE_ALT_BUFFER) {
 		if ((upd_data->update_region.width !=
 			upd_data->alt_buffer_data.alt_update_region.width) ||
@@ -3009,17 +3394,23 @@ static int mxc_epdc_fb_send_single_update(struct mxcfb_update_data *upd_data,
 	 * If either the working buffer is busy, or there are no LUTs available,
 	 * then we return and let the ISR handle the update later
 	 */
-	if ((fb_data->cur_update != NULL) || !epdc_any_luts_available()) {
-		/* Add processed Y buffer to update list */
-		list_add_tail(&upd_data_list->list, &fb_data->upd_buf_queue);
+	{
+		bool luts_available;
 
-		/* Return and allow the update to be submitted by the ISR. */
-		mutex_unlock(&fb_data->queue_mutex);
-		return 0;
+		luts_available = fb_data->epdc_wb_mode ? epdc_any_luts_real_available() :
+							 epdc_any_luts_available();
+		if ((fb_data->cur_update != NULL) || !luts_available) {
+			/* Add processed Y buffer to update list */
+			list_add_tail(&upd_data_list->list, &fb_data->upd_buf_queue);
+
+			/* Return and allow the update to be submitted by the ISR. */
+			mutex_unlock(&fb_data->queue_mutex);
+			return 0;
+		}
 	}
 
 	/* LUTs are available, so we get one here */
-	ret = epdc_choose_next_lut(fb_data->rev, &upd_data_list->lut_num);
+	ret = epdc_choose_next_lut(fb_data, &upd_data_list->lut_num);
 	if (ret && fb_data->tce_prevent && (fb_data->rev < 20)) {
 		dev_dbg(fb_data->dev, "Must wait for LUT15\n");
 		/* Add processed Y buffer to update list */
@@ -3054,6 +3445,11 @@ static int mxc_epdc_fb_send_single_update(struct mxcfb_update_data *upd_data,
 
 	/* Clear status and Enable LUT complete and WB complete IRQs */
 	epdc_working_buf_intr(true);
+
+	/* add working buffer update before display for external mode */
+	if (fb_data->epdc_wb_mode)
+		ret = epdc_working_buffer_update(fb_data, upd_data_list,
+				screen_upd_region);
 
 	/* Program EPDC update to process buffer */
 	epdc_set_update_addr(upd_data_list->phys_addr + upd_desc->epdc_offs);
@@ -3141,7 +3537,6 @@ int mxc_epdc_fb_send_update(struct mxcfb_update_data *upd_data,
 		return mxc_epdc_fb_send_single_update(upd_data, info);
 	}
 }
-EXPORT_SYMBOL(mxc_epdc_fb_send_update);
 
 int mxc_epdc_fb_wait_update_complete(struct mxcfb_update_marker_data *marker_data,
 						struct fb_info *info)
@@ -3201,7 +3596,6 @@ int mxc_epdc_fb_wait_update_complete(struct mxcfb_update_marker_data *marker_dat
 
 	return ret;
 }
-EXPORT_SYMBOL(mxc_epdc_fb_wait_update_complete);
 
 int mxc_epdc_fb_set_pwrdown_delay(u32 pwrdown_delay,
 					    struct fb_info *info)
@@ -3213,7 +3607,6 @@ int mxc_epdc_fb_set_pwrdown_delay(u32 pwrdown_delay,
 
 	return 0;
 }
-EXPORT_SYMBOL(mxc_epdc_fb_set_pwrdown_delay);
 
 int mxc_epdc_get_pwrdown_delay(struct fb_info *info)
 {
@@ -3222,7 +3615,6 @@ int mxc_epdc_get_pwrdown_delay(struct fb_info *info)
 
 	return fb_data->pwrdown_delay;
 }
-EXPORT_SYMBOL(mxc_epdc_get_pwrdown_delay);
 
 static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			     unsigned long arg)
@@ -3267,10 +3659,6 @@ static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	case MXCFB_SEND_UPDATE:
 		{
 			struct mxcfb_update_data upd_data;
-
-			if (mutex_lock_interruptible(&hard_lock) < 0)
-				return -ERESTARTSYS;
-
 			if (!copy_from_user(&upd_data, argp,
 				sizeof(upd_data))) {
 				ret = mxc_epdc_fb_send_update(&upd_data, info);
@@ -3280,8 +3668,6 @@ static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			} else {
 				ret = -EFAULT;
 			}
-
-			mutex_unlock(&hard_lock);
 
 			break;
 		}
@@ -3336,25 +3722,6 @@ static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 				ret = 0;
 			flush_cache_all();
 			outer_flush_all();
-			break;
-		}
-
-	case MXCFB_DISABLE_EPDC_ACCESS:
-		{
-			struct mxc_epdc_fb_data *fb_data = info ?
-				(struct mxc_epdc_fb_data *)info:g_fb_data;
-			mxc_epdc_fb_flush_updates(fb_data);
-			/* disable handling any user update request */
-			mutex_lock(&hard_lock);
-			ret = 0;
-			break;
-		}
-
-	case MXCFB_ENABLE_EPDC_ACCESS:
-		{
-			/* enable user update handling again */
-			mutex_unlock(&hard_lock);
-			ret = 0;
 			break;
 		}
 
@@ -3711,9 +4078,23 @@ static void epdc_intr_work_func(struct work_struct *work)
 	/* Capture EPDC status one time to limit exposure to race conditions */
 	epdc_luts_active = epdc_any_luts_active(fb_data->rev);
 	epdc_wb_busy = epdc_is_working_buffer_busy();
-	epdc_lut_cancelled = epdc_is_lut_cancelled();
-	epdc_luts_avail = epdc_any_luts_available();
-	epdc_collision = epdc_is_collision();
+
+	/*XXX unsupport update cancelled in external mode temporarily */
+	if (fb_data->epdc_wb_mode)
+		epdc_lut_cancelled = 0;
+	else
+		epdc_lut_cancelled = epdc_is_lut_cancelled();
+
+	if (fb_data->epdc_wb_mode)
+		epdc_luts_avail = epdc_any_luts_real_available();
+	else
+		epdc_luts_avail = epdc_any_luts_available();
+
+	if (fb_data->epdc_wb_mode)
+		epdc_collision = fb_data->col_info.pixel_cnt ? 1 : 0;
+	else
+		epdc_collision = epdc_is_collision();
+
 	if (fb_data->rev < 20)
 		epdc_irq_stat = __raw_readl(EPDC_IRQ);
 	else
@@ -3739,7 +4120,7 @@ static void epdc_intr_work_func(struct work_struct *work)
 		list_for_each_entry(collision_update,
 				    &fb_data->upd_buf_collision_list, list) {
 			collision_update->collision_mask =
-			    collision_update->collision_mask & ~(1 << i);
+			    collision_update->collision_mask & ~(1ULL << i);
 		}
 
 		epdc_clear_lut_complete_irq(fb_data->rev, i);
@@ -3863,6 +4244,7 @@ static void epdc_intr_work_func(struct work_struct *work)
 					next_marker->update_marker);
 				complete(&next_marker->update_completion);
 			}
+			memset(&fb_data->col_info, 0x0, sizeof(struct pxp_collision_info));
 		} else if (epdc_lut_cancelled && !epdc_collision) {
 			/*
 			* Note: The update may be cancelled (void) if all
@@ -3911,6 +4293,10 @@ static void epdc_intr_work_func(struct work_struct *work)
 			/* Real update (no dry-run), collision occurred */
 
 			/* Check list of colliding LUTs, and add to our collision mask */
+			if (fb_data->epdc_wb_mode)
+				fb_data->epdc_colliding_luts = (u64)fb_data->col_info.victim_luts[0] |
+					(((u64)fb_data->col_info.victim_luts[1]) << 32);
+
 			fb_data->cur_update->collision_mask =
 			    fb_data->epdc_colliding_luts;
 
@@ -3926,24 +4312,37 @@ static void epdc_intr_work_func(struct work_struct *work)
 			if ((fb_data->upd_scheme != UPDATE_SCHEME_SNAPSHOT)
 				&& (fb_data->rev >= 20)) {
 				u32 xres, yres, rotate;
+				struct mxcfb_rect adj_update_region;
 				struct mxcfb_rect *cur_upd_rect =
 					&fb_data->cur_update->update_desc->upd_data.update_region;
 
+				if (fb_data->epdc_wb_mode) {
+					adjust_coordinates(fb_data->epdc_fb_var.xres,
+						fb_data->epdc_fb_var.yres, fb_data->epdc_fb_var.rotate,
+						cur_upd_rect, &adj_update_region);
+
+					coll_region.left = fb_data->col_info.rect_min_x + adj_update_region.left;
+					coll_region.top  = fb_data->col_info.rect_min_y + adj_update_region.top;
+					coll_region.width  = fb_data->col_info.rect_max_x - fb_data->col_info.rect_min_x + 1;
+					coll_region.height = fb_data->col_info.rect_max_y - fb_data->col_info.rect_min_y + 1;
+					memset(&fb_data->col_info, 0x0, sizeof(struct pxp_collision_info));
+				} else {
 				/* Get collision region coords from EPDC */
-				coll_coord = __raw_readl(EPDC_UPD_COL_CORD);
-				coll_size = __raw_readl(EPDC_UPD_COL_SIZE);
-				coll_region.left =
-					(coll_coord & EPDC_UPD_COL_CORD_XCORD_MASK)
+					coll_coord = __raw_readl(EPDC_UPD_COL_CORD);
+					coll_size = __raw_readl(EPDC_UPD_COL_SIZE);
+					coll_region.left =
+						(coll_coord & EPDC_UPD_COL_CORD_XCORD_MASK)
 						>> EPDC_UPD_COL_CORD_XCORD_OFFSET;
-				coll_region.top =
-					(coll_coord & EPDC_UPD_COL_CORD_YCORD_MASK)
+					coll_region.top =
+						(coll_coord & EPDC_UPD_COL_CORD_YCORD_MASK)
 						>> EPDC_UPD_COL_CORD_YCORD_OFFSET;
-				coll_region.width =
-					(coll_size & EPDC_UPD_COL_SIZE_WIDTH_MASK)
+					coll_region.width =
+						(coll_size & EPDC_UPD_COL_SIZE_WIDTH_MASK)
 						>> EPDC_UPD_COL_SIZE_WIDTH_OFFSET;
-				coll_region.height =
-					(coll_size & EPDC_UPD_COL_SIZE_HEIGHT_MASK)
+					coll_region.height =
+						(coll_size & EPDC_UPD_COL_SIZE_HEIGHT_MASK)
 						>> EPDC_UPD_COL_SIZE_HEIGHT_OFFSET;
+				}
 				dev_dbg(fb_data->dev, "Coll region: l = %d, "
 					"t = %d, w = %d, h = %d\n",
 					coll_region.left, coll_region.top,
@@ -4110,7 +4509,7 @@ static void epdc_intr_work_func(struct work_struct *work)
 		return;
 	}
 
-	epdc_next_lut_15 = epdc_choose_next_lut(fb_data->rev, &next_lut);
+	epdc_next_lut_15 = epdc_choose_next_lut(fb_data, &next_lut);
 	/* Check to see if there is a valid LUT to use */
 	if (epdc_next_lut_15 && fb_data->tce_prevent && (fb_data->rev < 20)) {
 		dev_dbg(fb_data->dev, "Must wait for LUT15\n");
@@ -4181,6 +4580,12 @@ static void epdc_intr_work_func(struct work_struct *work)
 	/* Program EPDC update to process buffer */
 	next_upd_region =
 		&fb_data->cur_update->update_desc->upd_data.update_region;
+
+	/* add working buffer update here for external mode */
+	if (fb_data->epdc_wb_mode)
+		epdc_working_buffer_update(fb_data, fb_data->cur_update,
+				next_upd_region);
+
 	if (fb_data->cur_update->update_desc->upd_data.temp
 		!= TEMP_USE_AMBIENT) {
 		temp_index = mxc_epdc_fb_get_temp_index(fb_data,
@@ -4299,6 +4704,8 @@ static void mxc_epdc_fb_fw_handler(const struct firmware *fw,
 
 	wv_file = (struct mxcfb_waveform_data_file *)fw->data;
 
+	dump_fw_header(fb_data->dev, wv_file);
+
 	/* Get size and allocate temperature range table */
 	fb_data->trt_entries = wv_file->wdh.trc + 1;
 	fb_data->temp_range_bounds = kzalloc(fb_data->trt_entries, GFP_KERNEL);
@@ -4329,13 +4736,24 @@ static void mxc_epdc_fb_fw_handler(const struct firmware *fw,
 	memcpy(fb_data->waveform_buffer_virt, (u8 *)(fw->data) + wv_data_offs,
 		fb_data->waveform_buffer_size);
 
+	/* Check for advanced algorithms */
+	if ((wv_file->wdh.luts & WAVEFORM_HDR_LUT_ADVANCED_ALGO_MASK) != 0) {
+		dev_dbg(fb_data->dev,
+			"Waveform file supports advanced algorithms\n");
+			fb_data->waveform_is_advanced = true;
+	} else {
+		dev_dbg(fb_data->dev,
+			"Waveform file does not support advanced algorithms\n");
+		fb_data->waveform_is_advanced = false;
+	}
+
 	release_firmware(fw);
 
 	/* Enable clocks to access EPDC regs */
 	clk_prepare_enable(fb_data->epdc_clk_axi);
 
 	target_pix_clk = fb_data->cur_mode->vmode->pixclock;
-	/* Enable pix clk for EPDC */
+
 	rounded_pix_clk = clk_round_rate(fb_data->epdc_clk_pix, target_pix_clk);
 
 	if (((rounded_pix_clk >= target_pix_clk + target_pix_clk/100) ||
@@ -4359,6 +4777,8 @@ static void mxc_epdc_fb_fw_handler(const struct firmware *fw,
 	}
 
 	clk_set_rate(fb_data->epdc_clk_pix, rounded_pix_clk);
+
+	/* Enable pix clk for EPDC */
 	clk_prepare_enable(fb_data->epdc_clk_pix);
 
 	epdc_init_sequence(fb_data);
@@ -4389,6 +4809,7 @@ static void mxc_epdc_fb_fw_handler(const struct firmware *fw,
 	update.update_marker = INIT_UPDATE_MARKER;
 	update.temp = TEMP_USE_AMBIENT;
 	update.flags = 0;
+	update.dither_mode = 0;
 
 	upd_marker_data.update_marker = update.update_marker;
 
@@ -4410,7 +4831,7 @@ static int mxc_epdc_fb_init_hw(struct fb_info *info)
 
 	/*
 	 * Create fw search string based on ID string in selected videomode.
-	 * Format is "imx/epdc_[panel string].fw"
+	 * Format is "imx/epdc/epdc_[panel string].fw"
 	 */
 	if (fb_data->cur_mode) {
 		strcat(fb_data->fw_str, "imx/epdc/epdc_");
@@ -4465,12 +4886,12 @@ static struct device_attribute fb_attrs[] = {
 };
 
 static const struct of_device_id imx_epdc_dt_ids[] = {
-	{ .compatible = "fsl,imx6dl-epdc", },
+	{ .compatible = "fsl,imx7d-epdc", },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, imx_epdc_dt_ids);
 
-int mxc_epdc_fb_probe(struct platform_device *pdev)
+static int mxc_epdc_fb_probe(struct platform_device *pdev)
 {
 	int ret = 0;
 	struct pinctrl *pinctrl;
@@ -4494,12 +4915,69 @@ int mxc_epdc_fb_probe(struct platform_device *pdev)
 	unsigned long x_mem_size = 0;
 	u32 val;
 	int irq;
+	struct device_node *np = pdev->dev.of_node;
+	struct device_node *node;
+	phandle phandle;
+	u32 out_val[3];
+	int enable_gpio;
+
+	if (!np)
+		return -EINVAL;
 
 	fb_data = (struct mxc_epdc_fb_data *)framebuffer_alloc(
 			sizeof(struct mxc_epdc_fb_data), &pdev->dev);
 	if (fb_data == NULL) {
 		ret = -ENOMEM;
 		goto out;
+	}
+
+	ret = of_property_read_u32_array(np, "epdc-ram", out_val, 3);
+	if (ret) {
+		dev_dbg(&pdev->dev, "no epdc-ram property found\n");
+	} else {
+		phandle = *out_val;
+
+		node = of_find_node_by_phandle(phandle);
+		if (!node) {
+			dev_dbg(&pdev->dev, "not find gpr node by phandle\n");
+			ret = PTR_ERR(node);
+			goto out_fbdata;
+		}
+		fb_data->gpr = syscon_node_to_regmap(node);
+		if (IS_ERR(fb_data->gpr)) {
+			dev_err(&pdev->dev, "failed to get gpr regmap\n");
+			ret = PTR_ERR(fb_data->gpr);
+			goto out_fbdata;
+		}
+		of_node_put(node);
+		fb_data->req_gpr = out_val[1];
+		fb_data->req_bit = out_val[2];
+
+		regmap_update_bits(fb_data->gpr, fb_data->req_gpr,
+			1 << fb_data->req_bit, 0);
+	}
+
+	if (of_find_property(np, "en-gpios", NULL)) {
+		enable_gpio = of_get_named_gpio(np, "en-gpios", 0);
+		if (enable_gpio == -EPROBE_DEFER) {
+			dev_info(&pdev->dev, "GPIO requested is not"
+				"here yet, deferring the probe\n");
+			return -EPROBE_DEFER;
+		}
+		if (!gpio_is_valid(enable_gpio)) {
+			dev_warn(&pdev->dev, "No dt property: en-gpios\n");
+		} else {
+
+			ret = devm_gpio_request_one(&pdev->dev,
+						    enable_gpio,
+						    GPIOF_OUT_INIT_LOW,
+						    "en_pins");
+			if (ret) {
+				dev_err(&pdev->dev, "failed to request gpio"
+					" %d: %d\n", enable_gpio, ret);
+				return -EINVAL;
+			}
+		}
 	}
 
 	/* Get platform data and check validity */
@@ -4516,6 +4994,7 @@ int mxc_epdc_fb_probe(struct platform_device *pdev)
 		goto out_fbdata;
 	}
 
+	fb_data->epdc_wb_mode = 1;
 	fb_data->tce_prevent = 0;
 
 	if (options)
@@ -4605,9 +5084,9 @@ int mxc_epdc_fb_probe(struct platform_device *pdev)
 		goto out_cmap;
 	}
 
-	epdc_base = devm_ioremap_resource(&pdev->dev, res);
-	if (IS_ERR(epdc_base)) {
-		ret = PTR_ERR(epdc_base);
+	epdc_v2_base = devm_ioremap_resource(&pdev->dev, res);
+	if (epdc_v2_base == NULL) {
+		ret = -ENOMEM;
 		goto out_cmap;
 	}
 
@@ -4617,8 +5096,8 @@ int mxc_epdc_fb_probe(struct platform_device *pdev)
 						  &fb_data->phys_start,
 						  GFP_DMA | GFP_KERNEL);
 
-	if (IS_ERR(info->screen_base)) {
-		ret = PTR_ERR(info->screen_base);
+	if (info->screen_base == NULL) {
+		ret = -ENOMEM;
 		goto out_cmap;
 	}
 	dev_dbg(&pdev->dev, "allocated at %p:0x%x\n", info->screen_base,
@@ -4735,7 +5214,9 @@ int mxc_epdc_fb_probe(struct platform_device *pdev)
 	}
 
 	clk_prepare_enable(fb_data->epdc_clk_axi);
+	clk_prepare_enable(fb_data->epdc_clk_pix);
 	val = __raw_readl(EPDC_VERSION);
+	clk_disable_unprepare(fb_data->epdc_clk_pix);
 	clk_disable_unprepare(fb_data->epdc_clk_axi);
 	fb_data->rev = ((val & EPDC_VERSION_MAJOR_MASK) >>
 				EPDC_VERSION_MAJOR_OFFSET) * 10
@@ -4817,7 +5298,35 @@ int mxc_epdc_fb_probe(struct platform_device *pdev)
 		goto out_upd_buffers;
 	}
 
+	fb_data->virt_addr_y4 =
+	    dma_alloc_coherent(fb_data->info.device, fb_data->max_pix_size*2,
+			       &fb_data->phys_addr_y4,
+			       GFP_DMA | GFP_KERNEL);
+	if (fb_data->virt_addr_y4 == NULL) {
+		ret = -ENOMEM;
+		goto out_upd_buffers;
+	}
+
+	fb_data->virt_addr_y4c =
+	    dma_alloc_coherent(fb_data->info.device, fb_data->max_pix_size*2,
+			       &fb_data->phys_addr_y4c,
+			       GFP_DMA | GFP_KERNEL);
+	if (fb_data->virt_addr_y4c == NULL) {
+		ret = -ENOMEM;
+		goto out_upd_buffers;
+	}
+
+	fb_data->virt_addr_black =
+	    dma_alloc_coherent(fb_data->info.device, fb_data->max_pix_size*2,
+			       &fb_data->phys_addr_black,
+			       GFP_DMA | GFP_KERNEL);
+	if (fb_data->virt_addr_black == NULL) {
+		ret = -ENOMEM;
+		goto out_upd_buffers;
+	}
+
 	fb_data->working_buffer_size = vmode->yres * vmode->xres * 2;
+
 	/* Allocate memory for EPDC working buffer */
 	fb_data->working_buffer_virt =
 	    dma_alloc_coherent(&pdev->dev, fb_data->working_buffer_size,
@@ -4825,6 +5334,16 @@ int mxc_epdc_fb_probe(struct platform_device *pdev)
 			       GFP_DMA | GFP_KERNEL);
 	if (fb_data->working_buffer_virt == NULL) {
 		dev_err(&pdev->dev, "Can't allocate mem for working buf!\n");
+		ret = -ENOMEM;
+		goto out_copybuffer;
+	}
+
+	fb_data->tmp_working_buffer_virt =
+	    dma_alloc_coherent(&pdev->dev, fb_data->working_buffer_size,
+			       &fb_data->tmp_working_buffer_phys,
+			       GFP_DMA | GFP_KERNEL);
+	if (fb_data->tmp_working_buffer_virt == NULL) {
+		dev_err(&pdev->dev, "Can't allocate mem for tmp working buf!\n");
 		ret = -ENOMEM;
 		goto out_copybuffer;
 	}
@@ -5011,7 +5530,7 @@ int mxc_epdc_fb_probe(struct platform_device *pdev)
 
 	/* Initialize Scatter-gather list containing 2 buffer addresses. */
 	sg = fb_data->sg;
-	sg_init_table(sg, 2);
+	sg_init_table(sg, SG_NUM);
 
 	/*
 	 * For use in PxP transfers:
@@ -5141,6 +5660,9 @@ static int mxc_epdc_fb_remove(struct platform_device *pdev)
 	fb_dealloc_cmap(&fb_data->info.cmap);
 
 	framebuffer_release(&fb_data->info);
+	if (!IS_ERR_OR_NULL(fb_data->gpr))
+		regmap_update_bits(fb_data->gpr, fb_data->req_gpr,
+			1 << fb_data->req_bit, 1 << fb_data->req_bit);
 	platform_set_drvdata(pdev, NULL);
 
 	return 0;
@@ -5154,16 +5676,21 @@ static int mxc_epdc_fb_suspend(struct device *dev)
 
 	data->pwrdown_delay = FB_POWERDOWN_DISABLE;
 	ret = mxc_epdc_fb_blank(FB_BLANK_POWERDOWN, &data->info);
+
 	if (ret)
 		goto out;
 
 out:
+	pinctrl_pm_select_sleep_state(dev);
+
 	return ret;
 }
 
 static int mxc_epdc_fb_resume(struct device *dev)
 {
 	struct mxc_epdc_fb_data *data = dev_get_drvdata(dev);
+
+	pinctrl_pm_select_default_state(dev);
 
 	mxc_epdc_fb_blank(FB_BLANK_UNBLANK, &data->info);
 	epdc_init_settings(data);
@@ -5230,7 +5757,7 @@ static struct platform_driver mxc_epdc_fb_driver = {
 	.remove = mxc_epdc_fb_remove,
 	.shutdown = mxc_epdc_fb_shutdown,
 	.driver = {
-		   .name = "imx_epdc_fb",
+		   .name = "imx_epdc_v2_fb",
 		   .owner = THIS_MODULE,
 		   .of_match_table = of_match_ptr(imx_epdc_dt_ids),
 		   .pm = &mxc_epdc_fb_pm_ops,
@@ -5244,6 +5771,16 @@ static void pxp_dma_done(void *arg)
 	struct dma_chan *chan = tx_desc->txd.chan;
 	struct pxp_channel *pxp_chan = to_pxp_channel(chan);
 	struct mxc_epdc_fb_data *fb_data = pxp_chan->client;
+
+	/*
+	 * if epd works in external mode, we should queue epdc_intr_workqueue
+	 * after a wfe_a process finishes.
+	 */
+	if (fb_data->epdc_wb_mode && (tx_desc->proc_data.engine_enable & PXP_ENABLE_WFE_A)) {
+		pxp_get_collision_info(&fb_data->col_info);
+		queue_work(fb_data->epdc_intr_workqueue,
+			   &fb_data->epdc_intr_work);
+	}
 
 	/* This call will signal wait_for_completion_timeout() in send_buffer_to_pxp */
 	complete(&fb_data->pxp_tx_cmpl);
@@ -5283,12 +5820,179 @@ static int pxp_chan_init(struct mxc_epdc_fb_data *fb_data)
 	return 0;
 }
 
-/*
- * Function to call PxP DMA driver and send our latest FB update region
- * through the PxP and out to an intermediate buffer.
- * Note: This is a blocking call, so upon return the PxP tx should be complete.
- */
-static int pxp_process_update(struct mxc_epdc_fb_data *fb_data,
+static int pxp_wfe_b_process_clear_workingbuffer(struct mxc_epdc_fb_data *fb_data,
+			      u32 panel_width, u32 panel_height)
+{
+	dma_cookie_t cookie;
+	struct scatterlist *sg = fb_data->sg;
+	struct dma_chan *dma_chan;
+	struct pxp_tx_desc *desc;
+	struct dma_async_tx_descriptor *txd;
+	struct pxp_config_data *pxp_conf = &fb_data->pxp_conf;
+	struct pxp_proc_data *proc_data = &fb_data->pxp_conf.proc_data;
+	int i, j = 0, ret;
+	int length;
+
+	dev_dbg(fb_data->dev, "Starting PxP WFE_B process for clearing WB.\n");
+
+	/* First, check to see that we have acquired a PxP Channel object */
+	if (fb_data->pxp_chan == NULL) {
+		/*
+		 * PxP Channel has not yet been created and initialized,
+		 * so let's go ahead and try
+		 */
+		ret = pxp_chan_init(fb_data);
+		if (ret) {
+			/*
+			 * PxP channel init failed, and we can't use the
+			 * PxP until the PxP DMA driver has loaded, so we abort
+			 */
+			dev_err(fb_data->dev, "PxP chan init failed\n");
+			return -ENODEV;
+		}
+	}
+
+	/*
+	 * Init completion, so that we
+	 * can be properly informed of the completion
+	 * of the PxP task when it is done.
+	 */
+	init_completion(&fb_data->pxp_tx_cmpl);
+
+	dma_chan = &fb_data->pxp_chan->dma_chan;
+
+	txd = dma_chan->device->device_prep_slave_sg(dma_chan, sg, 2 + 4,
+						     DMA_TO_DEVICE,
+						     DMA_PREP_INTERRUPT,
+						     NULL);
+	if (!txd) {
+		dev_err(fb_data->info.device,
+			"Error preparing a DMA transaction descriptor.\n");
+		return -EIO;
+	}
+
+	txd->callback_param = txd;
+	txd->callback = pxp_dma_done;
+
+	proc_data->working_mode = PXP_MODE_STANDARD;
+	proc_data->engine_enable = PXP_ENABLE_WFE_B;
+	proc_data->lut_update = true;
+
+	pxp_conf->wfe_b_fetch_param[0].stride = panel_width;
+	pxp_conf->wfe_b_fetch_param[0].width = panel_width;
+	pxp_conf->wfe_b_fetch_param[0].height = panel_height;
+	pxp_conf->wfe_b_fetch_param[0].paddr = fb_data->phys_addr_black;
+	pxp_conf->wfe_b_fetch_param[1].stride = panel_width;
+	pxp_conf->wfe_b_fetch_param[1].width = panel_width;
+	pxp_conf->wfe_b_fetch_param[1].height = panel_height;
+	pxp_conf->wfe_b_fetch_param[1].paddr = fb_data->working_buffer_phys;
+
+	pxp_conf->wfe_b_store_param[0].stride = panel_width;
+	pxp_conf->wfe_b_store_param[0].width = panel_width;
+	pxp_conf->wfe_b_store_param[0].height = panel_height;
+	pxp_conf->wfe_b_store_param[0].paddr = fb_data->working_buffer_phys;/*WB*/
+	pxp_conf->wfe_b_store_param[1].stride = panel_width;
+	pxp_conf->wfe_b_store_param[1].width = panel_width;
+	pxp_conf->wfe_b_store_param[1].height = panel_height;
+	pxp_conf->wfe_b_store_param[1].paddr = 0;
+
+	desc = to_tx_desc(txd);
+	length = desc->len;
+
+	for (i = 0; i < length; i++) {
+		if (i == 0) {/* S0 */
+			memcpy(&desc->proc_data, proc_data, sizeof(struct pxp_proc_data));
+			pxp_conf->s0_param.paddr = sg_dma_address(&sg[0]);
+			memcpy(&desc->layer_param.s0_param, &pxp_conf->s0_param,
+				sizeof(struct pxp_layer_param));
+			desc = desc->next;
+		} else if (i == 1) {
+			pxp_conf->out_param.paddr = sg_dma_address(&sg[1]);
+			memcpy(&desc->layer_param.out_param, &pxp_conf->out_param,
+				sizeof(struct pxp_layer_param));
+			desc = desc->next;
+		} else if ((pxp_conf->proc_data.engine_enable & PXP_ENABLE_WFE_B) && (j < 4)) {
+			for (j = 0; j < 4; j++) {
+				if (j == 0) {
+					memcpy(&desc->layer_param.processing_param,
+					       &pxp_conf->wfe_b_fetch_param[0],
+					       sizeof(struct pxp_layer_param));
+					desc->layer_param.processing_param.flag = PXP_BUF_FLAG_WFE_B_FETCH0;
+				} else if (j == 1) {
+					memcpy(&desc->layer_param.processing_param,
+					       &pxp_conf->wfe_b_fetch_param[1],
+					       sizeof(struct pxp_layer_param));
+					desc->layer_param.processing_param.flag = PXP_BUF_FLAG_WFE_B_FETCH1;
+				} else if (j == 2) {
+					memcpy(&desc->layer_param.processing_param,
+					       &pxp_conf->wfe_b_store_param[0],
+					       sizeof(struct pxp_layer_param));
+					desc->layer_param.processing_param.flag = PXP_BUF_FLAG_WFE_B_STORE0;
+				} else if (j == 3) {
+					memcpy(&desc->layer_param.processing_param,
+					       &pxp_conf->wfe_b_store_param[1],
+					       sizeof(struct pxp_layer_param));
+					desc->layer_param.processing_param.flag = PXP_BUF_FLAG_WFE_B_STORE1;
+				}
+
+				desc = desc->next;
+			}
+
+			i += 4;
+		}
+	}
+
+	/* Submitting our TX starts the PxP processing task */
+	cookie = txd->tx_submit(txd);
+	if (cookie < 0) {
+		dev_err(fb_data->info.device, "Error sending FB through PxP\n");
+		return -EIO;
+	}
+
+	fb_data->txd = txd;
+
+	/* trigger ePxP */
+	dma_async_issue_pending(dma_chan);
+
+	return 0;
+}
+
+static int pxp_clear_wb_work_func(struct mxc_epdc_fb_data *fb_data)
+{
+	unsigned int hist_stat;
+	int ret;
+
+	dev_dbg(fb_data->dev, "PxP WFE_B to clear working buffer.\n");
+
+	ret = pxp_wfe_b_process_clear_workingbuffer(fb_data, fb_data->cur_mode->vmode->xres, fb_data->cur_mode->vmode->yres);
+	if (ret) {
+		dev_err(fb_data->dev, "Unable to submit PxP update task.\n");
+		mutex_unlock(&fb_data->pxp_mutex);
+		return ret;
+	}
+
+	/* If needed, enable EPDC HW while ePxP is processing */
+	if ((fb_data->power_state == POWER_STATE_OFF)
+		|| fb_data->powering_down) {
+		epdc_powerup(fb_data);
+	}
+
+	/* This is a blocking call, so upon return PxP tx should be done */
+	ret = pxp_complete_update(fb_data, &hist_stat);
+	if (ret) {
+		dev_err(fb_data->dev, "Unable to complete PxP update task: reagl/-d process\n");
+		mutex_unlock(&fb_data->pxp_mutex);
+		return ret;
+	}
+
+	epdc_reset_used_lut();
+
+	return 0;
+}
+
+
+/* PS_AS_OUT */
+static int pxp_legacy_process(struct mxc_epdc_fb_data *fb_data,
 			      u32 src_width, u32 src_height,
 			      struct mxcfb_rect *update_region)
 {
@@ -5302,7 +6006,7 @@ static int pxp_process_update(struct mxc_epdc_fb_data *fb_data,
 	int i, ret;
 	int length;
 
-	dev_dbg(fb_data->dev, "Starting PxP Send Buffer\n");
+	dev_dbg(fb_data->dev, "Starting PxP legacy process.\n");
 
 	/* First, check to see that we have acquired a PxP Channel object */
 	if (fb_data->pxp_chan == NULL) {
@@ -5343,6 +6047,9 @@ static int pxp_process_update(struct mxc_epdc_fb_data *fb_data,
 	txd->callback_param = txd;
 	txd->callback = pxp_dma_done;
 
+	proc_data->working_mode = PXP_MODE_LEGACY;
+	proc_data->engine_enable = PXP_ENABLE_PS_AS_OUT;
+
 	/*
 	 * Configure PxP for processing of new update region
 	 * The rest of our config params were set up in
@@ -5367,7 +6074,7 @@ static int pxp_process_update(struct mxc_epdc_fb_data *fb_data,
 	if (proc_data->rotate > 270)
 		proc_data->rotate = 0;
 
-	/* Just as V4L2 PXP, we should pass the rotated values to PXP */
+	/* we should pass the rotated values to PXP */
 	if ((proc_data->rotate == 90) || (proc_data->rotate == 270)) {
 		proc_data->drect.width = proc_data->srect.height;
 		proc_data->drect.height = proc_data->srect.width;
@@ -5387,23 +6094,497 @@ static int pxp_process_update(struct mxc_epdc_fb_data *fb_data,
 	if (fb_data->rev <= 20)
 		pxp_conf->out_param.stride = ALIGN(pxp_conf->out_param.stride, 8);
 
-
 	desc = to_tx_desc(txd);
 	length = desc->len;
+
 	for (i = 0; i < length; i++) {
 		if (i == 0) {/* S0 */
 			memcpy(&desc->proc_data, proc_data, sizeof(struct pxp_proc_data));
 			pxp_conf->s0_param.paddr = sg_dma_address(&sg[0]);
 			memcpy(&desc->layer_param.s0_param, &pxp_conf->s0_param,
 				sizeof(struct pxp_layer_param));
+			desc = desc->next;
+
 		} else if (i == 1) {
 			pxp_conf->out_param.paddr = sg_dma_address(&sg[1]);
 			memcpy(&desc->layer_param.out_param, &pxp_conf->out_param,
 				sizeof(struct pxp_layer_param));
+			desc = desc->next;
 		}
-		/* TODO: OverLay */
+	}
 
-		desc = desc->next;
+	/* Submitting our TX starts the PxP processing task */
+	cookie = txd->tx_submit(txd);
+	if (cookie < 0) {
+		dev_err(fb_data->info.device, "Error sending FB through PxP\n");
+		return -EIO;
+	}
+
+	fb_data->txd = txd;
+
+	/* trigger ePxP */
+	dma_async_issue_pending(dma_chan);
+
+	return 0;
+}
+
+static int pxp_process_dithering(struct mxc_epdc_fb_data *fb_data,
+			      struct mxcfb_rect *update_region)
+{
+	dma_cookie_t cookie;
+	struct scatterlist *sg = fb_data->sg;
+	struct dma_chan *dma_chan;
+	struct pxp_tx_desc *desc;
+	struct dma_async_tx_descriptor *txd;
+	struct pxp_config_data *pxp_conf = &fb_data->pxp_conf;
+	struct pxp_proc_data *proc_data = &fb_data->pxp_conf.proc_data;
+	int i, j = 0, ret;
+	int length;
+
+	dev_dbg(fb_data->dev, "Starting PxP Dithering process.\n");
+
+	/* First, check to see that we have acquired a PxP Channel object */
+	if (fb_data->pxp_chan == NULL) {
+		/*
+		 * PxP Channel has not yet been created and initialized,
+		 * so let's go ahead and try
+		 */
+		ret = pxp_chan_init(fb_data);
+		if (ret) {
+			/*
+			 * PxP channel init failed, and we can't use the
+			 * PxP until the PxP DMA driver has loaded, so we abort
+			 */
+			dev_err(fb_data->dev, "PxP chan init failed\n");
+			return -ENODEV;
+		}
+	}
+
+	/*
+	 * Init completion, so that we
+	 * can be properly informed of the completion
+	 * of the PxP task when it is done.
+	 */
+	init_completion(&fb_data->pxp_tx_cmpl);
+
+	dma_chan = &fb_data->pxp_chan->dma_chan;
+
+	txd = dma_chan->device->device_prep_slave_sg(dma_chan, sg, 2 + 4,
+						     DMA_TO_DEVICE,
+						     DMA_PREP_INTERRUPT,
+						     NULL);
+	if (!txd) {
+		dev_err(fb_data->info.device,
+			"Error preparing a DMA transaction descriptor.\n");
+		return -EIO;
+	}
+
+	txd->callback_param = txd;
+	txd->callback = pxp_dma_done;
+
+	proc_data->working_mode = PXP_MODE_STANDARD;
+	proc_data->engine_enable = PXP_ENABLE_DITHER;
+
+	pxp_conf->dither_fetch_param[0].stride = update_region->width;
+	pxp_conf->dither_fetch_param[0].width = update_region->width;
+	pxp_conf->dither_fetch_param[0].height = update_region->height;
+#ifdef USE_PS_AS_OUTPUT
+	pxp_conf->dither_fetch_param[0].paddr = sg_dma_address(&sg[1]);
+#else
+	pxp_conf->dither_fetch_param[0].paddr = sg_dma_address(&sg[0]);
+#endif
+	pxp_conf->dither_fetch_param[1].stride = update_region->width;
+	pxp_conf->dither_fetch_param[1].width = update_region->width;
+	pxp_conf->dither_fetch_param[1].height = update_region->height;
+	pxp_conf->dither_fetch_param[1].paddr = pxp_conf->dither_fetch_param[0].paddr;
+
+	pxp_conf->dither_store_param[0].stride = update_region->width;
+	pxp_conf->dither_store_param[0].width = update_region->width;
+	pxp_conf->dither_store_param[0].height = update_region->height;
+	pxp_conf->dither_store_param[0].paddr = fb_data->phys_addr_y4;
+	pxp_conf->dither_store_param[1].stride = update_region->width;
+	pxp_conf->dither_store_param[1].width = update_region->width;
+	pxp_conf->dither_store_param[1].height = update_region->height;
+	pxp_conf->dither_store_param[1].paddr = pxp_conf->dither_store_param[0].paddr;
+
+	desc = to_tx_desc(txd);
+	length = desc->len;
+
+	for (i = 0; i < length; i++) {
+		if (i == 0) {/* S0 */
+			memcpy(&desc->proc_data, proc_data, sizeof(struct pxp_proc_data));
+			pxp_conf->s0_param.paddr = sg_dma_address(&sg[0]);
+			memcpy(&desc->layer_param.s0_param, &pxp_conf->s0_param,
+				sizeof(struct pxp_layer_param));
+			desc = desc->next;
+		} else if (i == 1) {
+			pxp_conf->out_param.paddr = sg_dma_address(&sg[1]);
+			memcpy(&desc->layer_param.out_param, &pxp_conf->out_param,
+				sizeof(struct pxp_layer_param));
+			desc = desc->next;
+		} else if ((pxp_conf->proc_data.engine_enable & PXP_ENABLE_DITHER) && (j < 4)) {
+			for (j = 0; j < 4; j++) {
+				if (j == 0) {
+					memcpy(&desc->layer_param.processing_param,
+					       &pxp_conf->dither_fetch_param[0],
+					       sizeof(struct pxp_layer_param));
+					desc->layer_param.processing_param.flag = PXP_BUF_FLAG_DITHER_FETCH0;
+				} else if (j == 1) {
+					memcpy(&desc->layer_param.processing_param,
+					       &pxp_conf->dither_fetch_param[1],
+					       sizeof(struct pxp_layer_param));
+					desc->layer_param.processing_param.flag = PXP_BUF_FLAG_DITHER_FETCH1;
+				} else if (j == 2) {
+					memcpy(&desc->layer_param.processing_param,
+					       &pxp_conf->dither_store_param[0],
+					       sizeof(struct pxp_layer_param));
+					desc->layer_param.processing_param.flag = PXP_BUF_FLAG_DITHER_STORE0;
+				} else if (j == 3) {
+					memcpy(&desc->layer_param.processing_param,
+					       &pxp_conf->dither_store_param[1],
+					       sizeof(struct pxp_layer_param));
+					desc->layer_param.processing_param.flag = PXP_BUF_FLAG_DITHER_STORE1;
+				}
+
+				desc = desc->next;
+			}
+
+			i += 4;
+		}
+	}
+
+	/* Submitting our TX starts the PxP processing task */
+	cookie = txd->tx_submit(txd);
+	if (cookie < 0) {
+		dev_err(fb_data->info.device, "Error sending FB through PxP\n");
+		return -EIO;
+	}
+
+	fb_data->txd = txd;
+
+	/* trigger ePxP */
+	dma_async_issue_pending(dma_chan);
+
+	return 0;
+}
+
+/*
+ * Function to call PxP DMA driver and send our latest FB update region
+ * through the PxP and out to an intermediate buffer.
+ * Note: This is a blocking call, so upon return the PxP tx should be complete.
+ */
+static int pxp_wfe_a_process(struct mxc_epdc_fb_data *fb_data,
+			     struct mxcfb_rect *update_region,
+			     struct update_data_list *upd_data_list)
+{
+	dma_cookie_t cookie;
+	struct scatterlist *sg = fb_data->sg;
+	struct dma_chan *dma_chan;
+	struct pxp_tx_desc *desc;
+	struct dma_async_tx_descriptor *txd;
+	struct pxp_config_data *pxp_conf = &fb_data->pxp_conf;
+	struct pxp_proc_data *proc_data = &fb_data->pxp_conf.proc_data;
+	u32 wv_mode = upd_data_list->update_desc->upd_data.waveform_mode;
+	int i, j = 0, ret;
+	int length;
+
+	dev_dbg(fb_data->dev, "Starting PxP WFE_A process.\n");
+
+	/* First, check to see that we have acquired a PxP Channel object */
+	if (fb_data->pxp_chan == NULL) {
+		/*
+		 * PxP Channel has not yet been created and initialized,
+		 * so let's go ahead and try
+		 */
+		ret = pxp_chan_init(fb_data);
+		if (ret) {
+			/*
+			 * PxP channel init failed, and we can't use the
+			 * PxP until the PxP DMA driver has loaded, so we abort
+			 */
+			dev_err(fb_data->dev, "PxP chan init failed\n");
+			return -ENODEV;
+		}
+	}
+
+	/*
+	 * Init completion, so that we
+	 * can be properly informed of the completion
+	 * of the PxP task when it is done.
+	 */
+	init_completion(&fb_data->pxp_tx_cmpl);
+
+	dma_chan = &fb_data->pxp_chan->dma_chan;
+
+	txd = dma_chan->device->device_prep_slave_sg(dma_chan, sg, 2 + 4,
+						     DMA_TO_DEVICE,
+						     DMA_PREP_INTERRUPT,
+						     NULL);
+	if (!txd) {
+		dev_err(fb_data->info.device,
+			"Error preparing a DMA transaction descriptor.\n");
+		return -EIO;
+	}
+
+	txd->callback_param = txd;
+	txd->callback = pxp_dma_done;
+
+	proc_data->working_mode = PXP_MODE_STANDARD;
+	proc_data->engine_enable = PXP_ENABLE_WFE_A;
+	proc_data->lut = upd_data_list->lut_num;
+	proc_data->lut_status_1 = __raw_readl(EPDC_STATUS_LUTS);
+	proc_data->lut_status_2 = __raw_readl(EPDC_STATUS_LUTS2);
+
+	if (upd_data_list->update_desc->upd_data.flags & EPDC_FLAG_TEST_COLLISION) {
+		proc_data->detection_only = 1;
+		dev_dbg(fb_data->info.device,
+			 "collision test_only send to pxp\n");
+	} else
+		proc_data->detection_only = 0;
+
+	if (wv_mode == WAVEFORM_MODE_GLR16
+	 || wv_mode == WAVEFORM_MODE_GLD16)
+		proc_data->reagl_en = 1;
+
+	if (upd_data_list->update_desc->upd_data.update_mode == UPDATE_MODE_PARTIAL)
+		proc_data->partial_update = 1;
+	else
+		proc_data->partial_update = 0;
+
+	/* fetch0 is upd buffer */
+	pxp_conf->wfe_a_fetch_param[0].stride = upd_data_list->update_desc->epdc_stride;
+	pxp_conf->wfe_a_fetch_param[0].width = update_region->width;
+	pxp_conf->wfe_a_fetch_param[0].height = update_region->height;
+	/* upd buffer left and top should be always 0 */
+	pxp_conf->wfe_a_fetch_param[0].left = 0;
+	pxp_conf->wfe_a_fetch_param[0].top = 0;
+	if (proc_data->dither_mode) {
+		pxp_conf->wfe_a_fetch_param[0].paddr = fb_data->phys_addr_y4;
+	} else {
+#ifdef USE_PS_AS_OUTPUT
+	pxp_conf->wfe_a_fetch_param[0].paddr = upd_data_list->phys_addr + upd_data_list->update_desc->epdc_offs;
+
+#else
+	pxp_conf->wfe_a_fetch_param[0].paddr = sg_dma_address(&sg[0]);
+#endif
+	}
+
+	/* fetch1 is working buffer */
+	pxp_conf->wfe_a_fetch_param[1].stride = fb_data->cur_mode->vmode->xres;
+	pxp_conf->wfe_a_fetch_param[1].width = update_region->width;
+	pxp_conf->wfe_a_fetch_param[1].height = update_region->height;
+	pxp_conf->wfe_a_fetch_param[1].paddr = fb_data->working_buffer_phys;
+	pxp_conf->wfe_a_fetch_param[1].left = update_region->left;
+	pxp_conf->wfe_a_fetch_param[1].top = update_region->top;
+
+	/* store0 is y4c buffer */
+	pxp_conf->wfe_a_store_param[0].stride = fb_data->cur_mode->vmode->xres;
+	pxp_conf->wfe_a_store_param[0].width = update_region->width;
+	pxp_conf->wfe_a_store_param[0].height = update_region->height;
+	pxp_conf->wfe_a_store_param[0].paddr = fb_data->phys_addr_y4c;
+
+	/* store1 is (temp) working buffer */
+	pxp_conf->wfe_a_store_param[1].stride = fb_data->cur_mode->vmode->xres;
+	pxp_conf->wfe_a_store_param[1].width = update_region->width;
+	pxp_conf->wfe_a_store_param[1].height = update_region->height;
+	if (wv_mode == WAVEFORM_MODE_GLR16
+	 || wv_mode == WAVEFORM_MODE_GLD16)
+		pxp_conf->wfe_a_store_param[1].paddr = fb_data->tmp_working_buffer_phys;
+	else
+		pxp_conf->wfe_a_store_param[1].paddr = fb_data->working_buffer_phys;
+	pxp_conf->wfe_a_store_param[1].left = update_region->left;
+	pxp_conf->wfe_a_store_param[1].top = update_region->top;
+
+	desc = to_tx_desc(txd);
+	length = desc->len;
+
+	memcpy(&desc->proc_data, proc_data, sizeof(struct pxp_proc_data));
+	for (i = 0; i < length; i++) {
+		if (i == 0 || i == 1) {/* wfe_a won't use s0 or output at all */
+			desc = desc->next;
+		} else if ((pxp_conf->proc_data.engine_enable & PXP_ENABLE_WFE_A) && (j < 4)) {
+			for (j = 0; j < 4; j++) {
+				if (j == 0) {
+					memcpy(&desc->layer_param.processing_param,
+					       &pxp_conf->wfe_a_fetch_param[0],
+					       sizeof(struct pxp_layer_param));
+					desc->layer_param.processing_param.flag = PXP_BUF_FLAG_WFE_A_FETCH0;
+				} else if (j == 1) {
+					memcpy(&desc->layer_param.processing_param,
+					       &pxp_conf->wfe_a_fetch_param[1],
+					       sizeof(struct pxp_layer_param));
+					desc->layer_param.processing_param.flag = PXP_BUF_FLAG_WFE_A_FETCH1;
+				} else if (j == 2) {
+					memcpy(&desc->layer_param.processing_param,
+					       &pxp_conf->wfe_a_store_param[0],
+					       sizeof(struct pxp_layer_param));
+					desc->layer_param.processing_param.flag = PXP_BUF_FLAG_WFE_A_STORE0;
+				} else if (j == 3) {
+					memcpy(&desc->layer_param.processing_param,
+					       &pxp_conf->wfe_a_store_param[1],
+					       sizeof(struct pxp_layer_param));
+					desc->layer_param.processing_param.flag = PXP_BUF_FLAG_WFE_A_STORE1;
+				}
+
+				desc = desc->next;
+			}
+
+			i += 4;
+		}
+	}
+
+	/* Submitting our TX starts the PxP processing task */
+	cookie = txd->tx_submit(txd);
+	if (cookie < 0) {
+		dev_err(fb_data->info.device, "Error sending FB through PxP\n");
+		return -EIO;
+	}
+
+	fb_data->txd = txd;
+
+	/* trigger ePxP */
+	dma_async_issue_pending(dma_chan);
+
+	return 0;
+}
+
+/* For REAGL/-D processing */
+static int pxp_wfe_b_process_update(struct mxc_epdc_fb_data *fb_data,
+			      struct mxcfb_rect *update_region)
+{
+	dma_cookie_t cookie;
+	struct scatterlist *sg = fb_data->sg;
+	struct dma_chan *dma_chan;
+	struct pxp_tx_desc *desc;
+	struct dma_async_tx_descriptor *txd;
+	struct pxp_config_data *pxp_conf = &fb_data->pxp_conf;
+	struct pxp_proc_data *proc_data = &fb_data->pxp_conf.proc_data;
+	int i, j = 0, ret;
+	int length;
+
+	dev_dbg(fb_data->dev, "Starting PxP WFE_B process.\n");
+
+	/* First, check to see that we have acquired a PxP Channel object */
+	if (fb_data->pxp_chan == NULL) {
+		/*
+		 * PxP Channel has not yet been created and initialized,
+		 * so let's go ahead and try
+		 */
+		ret = pxp_chan_init(fb_data);
+		if (ret) {
+			/*
+			 * PxP channel init failed, and we can't use the
+			 * PxP until the PxP DMA driver has loaded, so we abort
+			 */
+			dev_err(fb_data->dev, "PxP chan init failed\n");
+			return -ENODEV;
+		}
+	}
+
+	/*
+	 * Init completion, so that we
+	 * can be properly informed of the completion
+	 * of the PxP task when it is done.
+	 */
+	init_completion(&fb_data->pxp_tx_cmpl);
+
+	dma_chan = &fb_data->pxp_chan->dma_chan;
+
+	txd = dma_chan->device->device_prep_slave_sg(dma_chan, sg, 2 + 4,
+						     DMA_TO_DEVICE,
+						     DMA_PREP_INTERRUPT,
+						     NULL);
+	if (!txd) {
+		dev_err(fb_data->info.device,
+			"Error preparing a DMA transaction descriptor.\n");
+		return -EIO;
+	}
+
+	txd->callback_param = txd;
+	txd->callback = pxp_dma_done;
+
+	proc_data->working_mode = PXP_MODE_STANDARD;
+	proc_data->engine_enable = PXP_ENABLE_WFE_B;
+	proc_data->lut_update = false;
+
+	pxp_conf->wfe_b_fetch_param[0].stride = fb_data->cur_mode->vmode->xres;
+	pxp_conf->wfe_b_fetch_param[0].width = fb_data->cur_mode->vmode->xres;
+	pxp_conf->wfe_b_fetch_param[0].height = fb_data->cur_mode->vmode->yres;
+	pxp_conf->wfe_b_fetch_param[0].paddr = fb_data->phys_addr_black;
+	pxp_conf->wfe_b_fetch_param[1].stride = fb_data->cur_mode->vmode->xres;
+	pxp_conf->wfe_b_fetch_param[1].width = update_region->width;
+	pxp_conf->wfe_b_fetch_param[1].height = update_region->height;
+	pxp_conf->wfe_b_fetch_param[1].top = update_region->top;
+	pxp_conf->wfe_b_fetch_param[1].left = update_region->left;
+	pxp_conf->wfe_b_fetch_param[1].paddr = fb_data->tmp_working_buffer_phys;
+
+	pxp_conf->wfe_b_store_param[0].stride = fb_data->cur_mode->vmode->xres;
+	pxp_conf->wfe_b_store_param[0].width = update_region->width;
+	pxp_conf->wfe_b_store_param[0].height = update_region->height;
+	pxp_conf->wfe_b_store_param[0].top = update_region->top;
+	pxp_conf->wfe_b_store_param[0].left = update_region->left;
+	pxp_conf->wfe_b_store_param[0].paddr = fb_data->working_buffer_phys;
+	pxp_conf->wfe_b_store_param[1].stride = fb_data->cur_mode->vmode->xres;
+	pxp_conf->wfe_b_store_param[1].width = update_region->width;
+	pxp_conf->wfe_b_store_param[1].height = update_region->height;
+	pxp_conf->wfe_b_store_param[1].paddr = 0;
+
+	desc = to_tx_desc(txd);
+	length = desc->len;
+
+	for (i = 0; i < length; i++) {
+		if (i == 0) {	/* S0 */
+			memcpy(&desc->proc_data, proc_data,
+			       sizeof(struct pxp_proc_data));
+			pxp_conf->s0_param.paddr = sg_dma_address(&sg[0]);
+			memcpy(&desc->layer_param.s0_param, &pxp_conf->s0_param,
+			       sizeof(struct pxp_layer_param));
+			desc = desc->next;
+		} else if (i == 1) {
+			pxp_conf->out_param.paddr = sg_dma_address(&sg[1]);
+			memcpy(&desc->layer_param.out_param,
+			       &pxp_conf->out_param,
+			       sizeof(struct pxp_layer_param));
+			desc = desc->next;
+		} else
+		    if ((pxp_conf->proc_data.engine_enable & PXP_ENABLE_WFE_B)
+			&& (j < 4)) {
+			for (j = 0; j < 4; j++) {
+				if (j == 0) {
+					memcpy(&desc->layer_param.
+					       processing_param,
+					       &pxp_conf->wfe_b_fetch_param[0],
+					       sizeof(struct pxp_layer_param));
+					desc->layer_param.processing_param.
+					    flag = PXP_BUF_FLAG_WFE_B_FETCH0;
+				} else if (j == 1) {
+					memcpy(&desc->layer_param.
+					       processing_param,
+					       &pxp_conf->wfe_b_fetch_param[1],
+					       sizeof(struct pxp_layer_param));
+					desc->layer_param.processing_param.
+					    flag = PXP_BUF_FLAG_WFE_B_FETCH1;
+				} else if (j == 2) {
+					memcpy(&desc->layer_param.
+					       processing_param,
+					       &pxp_conf->wfe_b_store_param[0],
+					       sizeof(struct pxp_layer_param));
+					desc->layer_param.processing_param.
+					    flag = PXP_BUF_FLAG_WFE_B_STORE0;
+				} else if (j == 3) {
+					memcpy(&desc->layer_param.
+					       processing_param,
+					       &pxp_conf->wfe_b_store_param[1],
+					       sizeof(struct pxp_layer_param));
+					desc->layer_param.processing_param.
+					    flag = PXP_BUF_FLAG_WFE_B_STORE1;
+				}
+
+				desc = desc->next;
+			}
+
+			i += 4;
+		}
 	}
 
 	/* Submitting our TX starts the PxP processing task */
@@ -5428,7 +6609,7 @@ static int pxp_complete_update(struct mxc_epdc_fb_data *fb_data, u32 *hist_stat)
 	 * Wait for completion event, which will be set
 	 * through our TX callback function.
 	 */
-	ret = wait_for_completion_timeout(&fb_data->pxp_tx_cmpl, HZ / 10);
+	ret = wait_for_completion_timeout(&fb_data->pxp_tx_cmpl, HZ * 2);
 	if (ret <= 0) {
 		dev_info(fb_data->info.device,
 			 "PxP operation failed due to %s\n",
@@ -5569,9 +6750,20 @@ static void do_dithering_processing_Y4_v1_0(
 	outer_flush_all();
 }
 
-module_platform_driver(mxc_epdc_fb_driver);
+static int __init mxc_epdc_fb_init(void)
+{
+	return platform_driver_register(&mxc_epdc_fb_driver);
+}
+late_initcall(mxc_epdc_fb_init);
+
+static void __exit mxc_epdc_fb_exit(void)
+{
+	platform_driver_unregister(&mxc_epdc_fb_driver);
+}
+module_exit(mxc_epdc_fb_exit);
+
 
 MODULE_AUTHOR("Freescale Semiconductor, Inc.");
-MODULE_DESCRIPTION("MXC EPDC framebuffer driver");
+MODULE_DESCRIPTION("MXC EPDC V2 framebuffer driver");
 MODULE_LICENSE("GPL");
 MODULE_SUPPORTED_DEVICE("fb");
