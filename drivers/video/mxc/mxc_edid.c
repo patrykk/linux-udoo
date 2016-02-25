@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2015 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2009-2014 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -754,10 +754,7 @@ int mxc_edid_read(struct i2c_adapter *adp, unsigned short addr,
 
 		/* FIXME: mxc_edid_readsegblk() won't read more than 2 blocks
 		 * and the for-loop will read past the end of the buffer! :-( */
-		if (extblknum > 3) {
-			WARN_ON(true);
-			return -EINVAL;
-		}
+		BUG_ON(extblknum > 3);
 
 		/* need read segment block? */
 		if (extblknum > 1) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2012-2014 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -75,7 +75,6 @@ struct ldb_info {
 	bool split_cap;
 	bool dual_cap;
 	bool ext_bgref_cap;
-	bool clk_fixup;
 	int ctrl_reg;
 	int bus_mux_num;
 	const struct bus_mux *buses;
@@ -105,7 +104,6 @@ struct ldb_data {
 	u32 ctrl;
 	bool spl_mode;
 	bool dual_mode;
-	bool clk_fixup;
 	struct clk *di_clk[4];
 	struct clk *ldb_di_clk[2];
 	struct clk *div_3_5_clk[2];
@@ -165,17 +163,6 @@ static const struct ldb_info imx6q_ldb_info = {
 	.split_cap = true,
 	.dual_cap = true,
 	.ext_bgref_cap = false,
-	.clk_fixup = false,
-	.ctrl_reg = IOMUXC_GPR2,
-	.bus_mux_num = ARRAY_SIZE(imx6q_ldb_buses),
-	.buses = imx6q_ldb_buses,
-};
-
-static const struct ldb_info imx6qp_ldb_info = {
-	.split_cap = true,
-	.dual_cap = true,
-	.ext_bgref_cap = false,
-	.clk_fixup = true,
 	.ctrl_reg = IOMUXC_GPR2,
 	.bus_mux_num = ARRAY_SIZE(imx6q_ldb_buses),
 	.buses = imx6q_ldb_buses,
@@ -227,7 +214,6 @@ static const struct ldb_info imx6dl_ldb_info = {
 	.split_cap = true,
 	.dual_cap = true,
 	.ext_bgref_cap = false,
-	.clk_fixup = false,
 	.ctrl_reg = IOMUXC_GPR2,
 	.bus_mux_num = ARRAY_SIZE(imx6dl_ldb_buses),
 	.buses = imx6dl_ldb_buses,
@@ -257,7 +243,6 @@ static const struct ldb_info imx6sx_ldb_info = {
 	.split_cap = false,
 	.dual_cap = false,
 	.ext_bgref_cap = false,
-	.clk_fixup = false,
 	.ctrl_reg = IOMUXC_GPR6,
 	.bus_mux_num = ARRAY_SIZE(imx6sx_ldb_buses),
 	.buses = imx6sx_ldb_buses,
@@ -287,14 +272,12 @@ static const struct ldb_info imx53_ldb_info = {
 	.split_cap = true,
 	.dual_cap = false,
 	.ext_bgref_cap = true,
-	.clk_fixup = false,
 	.ctrl_reg = IOMUXC_GPR2,
 	.bus_mux_num = ARRAY_SIZE(imx53_ldb_buses),
 	.buses = imx53_ldb_buses,
 };
 
 static const struct of_device_id ldb_dt_ids[] = {
-	{ .compatible = "fsl,imx6qp-ldb", .data = &imx6qp_ldb_info, },
 	{ .compatible = "fsl,imx6q-ldb", .data = &imx6q_ldb_info, },
 	{ .compatible = "fsl,imx6dl-ldb", .data = &imx6dl_ldb_info, },
 	{ .compatible = "fsl,imx6sx-ldb", .data = &imx6sx_ldb_info, },
@@ -438,28 +421,16 @@ static int ldb_setup(struct mxc_dispdrv_handle *mddh,
 		return ret;
 	}
 
-
-	if (ldb->clk_fixup) {
-		/*
-		 * ldb_di_sel_parent(plls) -> ldb_di_sel -> ldb_di[chno] ->
-		 *
-		 *     -> div_3_5[chno] ->
-		 * -> |                   |-> div_sel[chno] -> di[id]
-		 *     ->  div_7[chno] ->
-		 */
-		clk_set_parent(ldb->di_clk[id], ldb->div_sel_clk[chno]);
-	} else {
-		/*
-		 * ldb_di_sel_parent(plls) -> ldb_di_sel ->
-		 *
-		 *     -> div_3_5[chno] ->
-		 * -> |                   |-> div_sel[chno] ->
-		 *     ->  div_7[chno] ->
-		 *
-		 * -> ldb_di[chno] -> di[id]
-		 */
-		clk_set_parent(ldb->di_clk[id], ldb->ldb_di_clk[chno]);
-	}
+	/*
+	 * ldb_di_sel_parent(plls) -> ldb_di_sel ->
+	 *
+	 *     -> div_3_5[chno] ->
+	 * -> |                   |-> div_sel[chno] ->
+	 *     ->  div_7[chno] ->
+	 *
+	 * -> ldb_di[chno] -> di[id]
+	 */
+	clk_set_parent(ldb->di_clk[id], ldb->ldb_di_clk[chno]);
 	ldb_di_parent = ldb->spl_mode ? ldb->div_3_5_clk[chno] :
 			ldb->div_7_clk[chno];
 	clk_set_parent(ldb->div_sel_clk[chno], ldb_di_parent);
@@ -724,7 +695,6 @@ static int ldb_probe(struct platform_device *pdev)
 	ldb->bus_mux_num = ldb_info->bus_mux_num;
 	ldb->buses = ldb_info->buses;
 	ldb->ctrl_reg = ldb_info->ctrl_reg;
-	ldb->clk_fixup = ldb_info->clk_fixup;
 	ldb->primary_chno = -1;
 
 	ext_ref = of_property_read_bool(np, "ext-ref");

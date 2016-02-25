@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2015 Freescale Semiconductor, Inc.
+ * Copyright (C) 2010-2014 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
  * Copyright 2008 Embedded Alley Solutions, Inc All Rights Reserved.
  */
 
-#include <linux/busfreq-imx.h>
+#include <linux/busfreq-imx6.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/device.h>
@@ -90,7 +90,7 @@
 #define MERGE_BLOCK	2
 
 static unsigned long default_bpp = 16;
-static DEFINE_MUTEX(hard_lock);
+DEFINE_MUTEX(hard_lock);
 
 struct update_marker_data {
 	struct list_head full_list;
@@ -4288,7 +4288,7 @@ static void mxc_epdc_fb_fw_handler(const struct firmware *fw,
 			"Can't find firmware. Trying fallback fw\n");
 		fb_data->fw_default_load = true;
 		ret = request_firmware_nowait(THIS_MODULE, FW_ACTION_HOTPLUG,
-			"imx/epdc/epdc.fw", fb_data->dev, GFP_KERNEL, fb_data,
+			"imx/epdc.fw", fb_data->dev, GFP_KERNEL, fb_data,
 			mxc_epdc_fb_fw_handler);
 		if (ret)
 			dev_err(fb_data->dev,
@@ -4335,7 +4335,6 @@ static void mxc_epdc_fb_fw_handler(const struct firmware *fw,
 	clk_prepare_enable(fb_data->epdc_clk_axi);
 
 	target_pix_clk = fb_data->cur_mode->vmode->pixclock;
-	/* Enable pix clk for EPDC */
 	rounded_pix_clk = clk_round_rate(fb_data->epdc_clk_pix, target_pix_clk);
 
 	if (((rounded_pix_clk >= target_pix_clk + target_pix_clk/100) ||
@@ -4359,6 +4358,7 @@ static void mxc_epdc_fb_fw_handler(const struct firmware *fw,
 	}
 
 	clk_set_rate(fb_data->epdc_clk_pix, rounded_pix_clk);
+	/* Enable pix clk for EPDC */
 	clk_prepare_enable(fb_data->epdc_clk_pix);
 
 	epdc_init_sequence(fb_data);
@@ -4413,7 +4413,7 @@ static int mxc_epdc_fb_init_hw(struct fb_info *info)
 	 * Format is "imx/epdc_[panel string].fw"
 	 */
 	if (fb_data->cur_mode) {
-		strcat(fb_data->fw_str, "imx/epdc/epdc_");
+		strcat(fb_data->fw_str, "imx/epdc_");
 		strcat(fb_data->fw_str, fb_data->cur_mode->vmode->name);
 		strcat(fb_data->fw_str, ".fw");
 	}
@@ -5146,7 +5146,7 @@ static int mxc_epdc_fb_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_PM
 static int mxc_epdc_fb_suspend(struct device *dev)
 {
 	struct mxc_epdc_fb_data *data = dev_get_drvdata(dev);
@@ -5176,7 +5176,7 @@ static int mxc_epdc_fb_resume(struct device *dev)
 #define mxc_epdc_fb_resume	NULL
 #endif
 
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM_SLEEP
 static int mxc_epdc_fb_runtime_suspend(struct device *dev)
 {
 	release_bus_freq(BUS_FREQ_HIGH);
