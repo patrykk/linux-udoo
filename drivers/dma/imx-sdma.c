@@ -954,7 +954,6 @@ static struct sdma_channel *to_sdma_chan(struct dma_chan *chan)
 static int sdma_disable_channel(struct dma_chan *chan)
 {
 	struct sdma_channel *sdmac = to_sdma_chan(chan);
-	struct imx_dma_data *data = sdmac->chan.private;
 	struct sdma_engine *sdma = sdmac->sdma;
 	int channel = sdmac->channel;
 
