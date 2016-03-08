@@ -20,6 +20,7 @@
  */
 #include <asm/dma.h>
 #include <linux/busfreq-imx6.h>
+#include <linux/mfd/syscon.h>
 #include <linux/clk.h>
 #include <linux/dma-mapping.h>
 #include <linux/delay.h>
@@ -39,6 +40,7 @@
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+#include <linux/regmap.h>
 #include <linux/slab.h>
 #include <linux/time.h>
 #include <linux/v4l2-mediabus.h>
@@ -56,7 +58,7 @@
 #define MX6S_CAM_VERSION "0.0.1"
 #define MX6S_CAM_DRIVER_DESCRIPTION "i.MX6S_CSI"
 
-#define MAX_VIDEO_MEM 16
+#define MAX_VIDEO_MEM 64
 
 /* reset values */
 #define CSICR1_RESET_VAL	0x40000800
@@ -135,6 +137,14 @@
 
 /* csi control reg 18 */
 #define BIT_CSI_ENABLE			(0x1 << 31)
+#define BIT_MIPI_DATA_FORMAT_RAW8              (0x2a << 25)
+#define BIT_MIPI_DATA_FORMAT_RAW10             (0x2b << 25)
+#define BIT_MIPI_DATA_FORMAT_YUV422_8B (0x1e << 25)
+#define BIT_MIPI_DATA_FORMAT_MASK      (0x3F << 25)
+#define BIT_MIPI_DATA_FORMAT_OFFSET    25
+#define BIT_DATA_FROM_MIPI             (0x1 << 22)
+#define BIT_MIPI_YU_SWAP               (0x1 << 21)
+#define BIT_MIPI_DOUBLE_CMPNT  (0x1 << 20)
 #define BIT_BASEADDR_CHG_ERR_EN	(0x1 << 9)
 #define BIT_BASEADDR_SWITCH_SEL	(0x1 << 5)
 #define BIT_BASEADDR_SWITCH_EN	(0x1 << 4)
@@ -258,7 +268,13 @@ static struct mx6s_fmt formats[] = {
 		.pixelformat	= V4L2_PIX_FMT_YUV32,
 		.mbus_code	= MEDIA_BUS_FMT_AYUV8_1X32,
 		.bpp		= 4,
-	}
+	}, {
+                .name           = "RAWRGB8 (SBGGR8)",
+                .fourcc         = V4L2_PIX_FMT_SBGGR8,
+                .pixelformat    = V4L2_PIX_FMT_SBGGR8,
+                .mbus_code      = MEDIA_BUS_FMT_SBGGR8_1X8,
+                .bpp            = 1,
+        }
 };
 
 struct mx6s_buf_internal {
@@ -272,6 +288,12 @@ struct mx6s_buffer {
 	/* common v4l buffer stuff -- must be first */
 	struct vb2_buffer			vb;
 	struct mx6s_buf_internal	internal;
+};
+
+struct mx6s_csi_mux {
+       struct regmap *gpr;
+       u8 req_gpr;
+       u8 req_bit;
 };
 
 struct mx6s_csi_dev {
@@ -316,6 +338,9 @@ struct mx6s_csi_dev {
 	struct v4l2_async_subdev	asd;
 	struct v4l2_async_notifier	subdev_notifier;
 	struct v4l2_async_subdev	*async_subdevs[2];
+
+        bool csi_mux_mipi;
+        struct mx6s_csi_mux csi_mux;
 };
 
 static inline int csi_read(struct mx6s_csi_dev *csi, unsigned int offset)
@@ -453,6 +478,7 @@ static void csi_enable_int(struct mx6s_csi_dev *csi_dev, int arg)
 	unsigned long cr1 = __raw_readl(csi_dev->regbase + CSI_CSICR1);
 
 	cr1 |= BIT_SOF_INTEN;
+	cr1 |= BIT_RFF_OR_INT;
 	if (arg == 1) {
 		/* still capture needs DMA intterrupt */
 		cr1 |= BIT_FB1_DMA_DONE_INTEN;
@@ -466,6 +492,7 @@ static void csi_disable_int(struct mx6s_csi_dev *csi_dev)
 	unsigned long cr1 = __raw_readl(csi_dev->regbase + CSI_CSICR1);
 
 	cr1 &= ~BIT_SOF_INTEN;
+	cr1 &= ~BIT_RFF_OR_INT;
 	cr1 &= ~BIT_FB1_DMA_DONE_INTEN;
 	cr1 &= ~BIT_FB2_DMA_DONE_INTEN;
 	__raw_writel(cr1, csi_dev->regbase + CSI_CSICR1);
@@ -580,8 +607,21 @@ static void csi_set_16bit_imagpara(struct mx6s_csi_dev *csi,
 {
 	int imag_para = 0;
 	unsigned long cr3 = __raw_readl(csi->regbase + CSI_CSICR3);
+        imag_para = ((width * 2) << 16) | height;
+        __raw_writel(imag_para, csi->regbase + CSI_CSIIMAG_PARA);
 
-	imag_para = (width << 16) | (height * 2);
+        /* reflash the embeded DMA controller */
+        __raw_writel(cr3 | BIT_DMA_REFLASH_RFF, csi->regbase + CSI_CSICR3);
+}
+
+static void csi_set_8bit_imagpara(struct mx6s_csi_dev *csi,
+                                       int width, int height)
+{
+        int imag_para = 0;
+        unsigned long cr3 = __raw_readl(csi->regbase + CSI_CSICR3);
+
+        imag_para = (width << 16) | height;
+
 	__raw_writel(imag_para, csi->regbase + CSI_CSIIMAG_PARA);
 
 	/* reflash the embeded DMA controller */
@@ -633,8 +673,9 @@ static int mx6s_videobuf_prepare(struct vb2_buffer *vb)
 	 * This can be useful if you want to see if we actually fill
 	 * the buffer with something
 	 */
-	memset((void *)vb2_plane_vaddr(vb, 0),
-	       0xaa, vb2_get_plane_payload(vb, 0));
+        if (vb2_plane_vaddr(vb, 0))
+                memset((void *)vb2_plane_vaddr(vb, 0),
+                       0xaa, vb2_get_plane_payload(vb, 0));
 #endif
 
 	vb2_set_plane_payload(vb, 0, csi_dev->pix.sizeimage);
@@ -691,19 +732,64 @@ static void mx6s_csi_deinit(struct mx6s_csi_dev *csi_dev)
 	csi_clk_disable(csi_dev);
 }
 
-static void mx6s_csi_enable(struct mx6s_csi_dev *csi_dev)
+static int mx6s_csi_enable(struct mx6s_csi_dev *csi_dev)
 {
 	struct v4l2_pix_format *pix = &csi_dev->pix;
+        unsigned long flags;
+        unsigned long val;
+        int timeout, timeout2;
 
 	csisw_reset(csi_dev);
 
 	if (pix->field == V4L2_FIELD_INTERLACED)
 		csi_tvdec_enable(csi_dev, true);
 
-	csi_dmareq_rff_enable(csi_dev);
-	csi_enable_int(csi_dev, 1);
-	csi_enable(csi_dev, 1);
+       /* For mipi csi input only */
+       if (csi_dev->csi_mux_mipi == true) {
+               csi_dmareq_rff_enable(csi_dev);
+               csi_enable_int(csi_dev, 1);
+               csi_enable(csi_dev, 1);
+               return 0;
+       }
 
+       local_irq_save(flags);
+       for (timeout = 10000000; timeout > 0; timeout--) {
+               if (csi_read(csi_dev, CSI_CSISR) & BIT_SOF_INT) {
+                       val = csi_read(csi_dev, CSI_CSICR3);
+                       csi_write(csi_dev, val | BIT_DMA_REFLASH_RFF,
+                                       CSI_CSICR3);
+                       /* Wait DMA reflash done */
+                       for (timeout2 = 1000000; timeout2 > 0; timeout2--) {
+                               if (csi_read(csi_dev, CSI_CSICR3) &
+                                       BIT_DMA_REFLASH_RFF)
+                                       cpu_relax();
+                               else
+                                       break;
+                       }
+                       if (timeout2 <= 0) {
+                               pr_err("timeout when wait for reflash done.\n");
+                               local_irq_restore(flags);
+                               return -ETIME;
+                       }
+                       /* For imx6sl csi, DMA FIFO will auto start when sensor ready to work,
+                        * so DMA should enable right after FIFO reset, otherwise dma will lost data
+                        * and image will split.
+                        */
+                       csi_dmareq_rff_enable(csi_dev);
+                       csi_enable_int(csi_dev, 1);
+                       csi_enable(csi_dev, 1);
+                       break;
+               } else
+                       cpu_relax();
+       }
+       if (timeout <= 0) {
+               pr_err("timeout when wait for SOF\n");
+               local_irq_restore(flags);
+               return -ETIME;
+       }
+       local_irq_restore(flags);
+
+       return 0;
 }
 
 static void mx6s_csi_disable(struct mx6s_csi_dev *csi_dev)
@@ -730,6 +816,7 @@ static void mx6s_csi_disable(struct mx6s_csi_dev *csi_dev)
 static int mx6s_configure_csi(struct mx6s_csi_dev *csi_dev)
 {
 	struct v4l2_pix_format *pix = &csi_dev->pix;
+	u32 cr1, cr18;
 
 	if (pix->field == V4L2_FIELD_INTERLACED) {
 		csi_deinterlace_enable(csi_dev, true);
@@ -750,11 +837,38 @@ static int mx6s_configure_csi(struct mx6s_csi_dev *csi_dev)
 	case V4L2_PIX_FMT_YUYV:
 		csi_set_16bit_imagpara(csi_dev, pix->width, pix->height);
 		break;
+        case V4L2_PIX_FMT_SBGGR8:
+                csi_set_8bit_imagpara(csi_dev, pix->width, pix->height);
+                break;
 	default:
 		pr_debug("   case not supported\n");
 		return -EINVAL;
 	}
 
+        if (csi_dev->csi_mux_mipi == true) {
+               cr1 = csi_read(csi_dev, CSI_CSICR1);
+               cr1 &= ~BIT_GCLK_MODE;
+               csi_write(csi_dev, cr1, CSI_CSICR1);
+
+               cr18 = csi_read(csi_dev, CSI_CSICR18);
+               cr18 &= BIT_MIPI_DATA_FORMAT_MASK;
+               cr18 |= BIT_DATA_FROM_MIPI;
+
+               switch (csi_dev->fmt->pixelformat) {
+               case V4L2_PIX_FMT_UYVY:
+               case V4L2_PIX_FMT_YUYV:
+                       cr18 |= BIT_MIPI_DATA_FORMAT_YUV422_8B;
+                       break;
+               case V4L2_PIX_FMT_SBGGR8:
+                       cr18 |= BIT_MIPI_DATA_FORMAT_RAW8;
+                       break;
+               default:
+                       pr_debug("   fmt not supported\n");
+                       return -EINVAL;
+               }
+
+               csi_write(csi_dev, cr18, CSI_CSICR18);
+        }
 	return 0;
 }
 
@@ -816,13 +930,11 @@ static int mx6s_start_streaming(struct vb2_queue *vq, unsigned int count)
 	list_move_tail(csi_dev->capture.next, &csi_dev->active_bufs);
 
 	spin_unlock_irqrestore(&csi_dev->slock, flags);
-
-	mx6s_csi_enable(csi_dev);
-
-	return 0;
+	
+	return mx6s_csi_enable(csi_dev);
 }
 
-static void mx6s_stop_streaming(struct vb2_queue *vq)
+static int mx6s_stop_streaming(struct vb2_queue *vq)
 {
 	struct mx6s_csi_dev *csi_dev = vb2_get_drv_priv(vq);
 	unsigned long flags;
@@ -853,7 +965,7 @@ static void mx6s_stop_streaming(struct vb2_queue *vq)
 				csi_dev->discard_size, b,
 				csi_dev->discard_buffer_dma);
 
-	return;
+	return 0;
 }
 
 static struct vb2_ops mx6s_videobuf_ops = {
@@ -905,8 +1017,8 @@ static void mx6s_csi_frame_done(struct mx6s_csi_dev *csi_dev,
 				vb2_get_plane_payload(vb, 0));
 
 		list_del_init(&buf->internal.queue);
-		v4l2_get_timestamp(&vbuf->timestamp);
-		vbuf->sequence = csi_dev->frame_count;
+                v4l2_get_timestamp(&vbuf->timestamp);
+                vbuf->sequence = csi_dev->frame_count;
 		if (err)
 			vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
 		else
@@ -967,6 +1079,9 @@ static irqreturn_t mx6s_csi_irq_handler(int irq, void *data)
 		spin_unlock(&csi_dev->slock);
 		return IRQ_HANDLED;
 	}
+
+        if (status & BIT_RFF_OR_INT)
+                dev_warn(csi_dev->dev, "%s Rx fifo overflow\n", __func__);
 
 	if (status & BIT_HRESP_ERR_INT) {
 		/* software reset */
@@ -1042,6 +1157,7 @@ static irqreturn_t mx6s_csi_irq_handler(int irq, void *data)
 static int mx6s_csi_open(struct file *file)
 {
 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
+	struct v4l2_subdev *sd = csi_dev->sd;
 	struct vb2_queue *q = &csi_dev->vb2_vidq;
 	int ret = 0;
 
@@ -1071,6 +1187,8 @@ static int mx6s_csi_open(struct file *file)
 
 	request_bus_freq(BUS_FREQ_HIGH);
 
+	v4l2_subdev_call(sd, core, s_power, 1);
+
 	mx6s_csi_init(csi_dev);
 
 	mutex_unlock(&csi_dev->lock);
@@ -1086,13 +1204,15 @@ unlock:
 static int mx6s_csi_close(struct file *file)
 {
 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
+	struct v4l2_subdev *sd = csi_dev->sd;
 
 	mutex_lock(&csi_dev->lock);
 
 	vb2_queue_release(&csi_dev->vb2_vidq);
 
 	mx6s_csi_deinit(csi_dev);
-
+	v4l2_subdev_call(sd, core, s_power, 0);
+	
 	vb2_dma_contig_cleanup_ctx(csi_dev->alloc_ctx);
 	mutex_unlock(&csi_dev->lock);
 
@@ -1258,36 +1378,31 @@ static int mx6s_vidioc_enum_fmt_vid_cap(struct file *file, void  *priv,
 	struct v4l2_subdev *sd = csi_dev->sd;
 	u32 code;
 	struct mx6s_fmt *fmt;
-	int ret;
-
+	int ret = 0;
 	int index = f->index;
 
 	WARN_ON(priv != file->private_data);
-
-//	ret = v4l2_subdev_call(sd, video, enum_mbus_fmt, index, &code);
-//	if (ret < 0)
-		/* no more formats */
-//		return -EINVAL;
 
 	if (v4l2_subdev_has_op(sd, pad, enum_mbus_code)) {
 		struct v4l2_subdev_mbus_code_enum c;
 		c.index = index;
 
-		ret = v4l2_subdev_call(sd, pad, enum_mbus_code, NULL, &c);
-		if (ret < 0)
+		ret = v4l2_subdev_call(sd, pad, enum_mbus_code, NULL, &c);	
+		if (ret < 0) {
+			dev_dbg(csi_dev->dev, "No more fmt\n");
 			return -EINVAL;
-		
-		code = c.code;
+		}
+	}
 
 	fmt = format_by_mbus(code);
 	if (!fmt) {
-		dev_err(csi_dev->dev, "mbus (0x%08x) invalid.", code);
+		dev_err(csi_dev->dev, "mbus (0x%08x) invalid.\n", code);
 		return -EINVAL;
 	}
 
 	strlcpy(f->description, fmt->name, sizeof(f->description));
-	f->pixelformat = csi_dev->fmt->pixelformat;
-	}
+	f->pixelformat = fmt->pixelformat;
+	
 	return 0;
 }
 
@@ -1301,6 +1416,7 @@ static int mx6s_vidioc_try_fmt_vid_cap(struct file *file, void *priv,
 	struct v4l2_subdev_pad_config pad_cfg;
 	struct v4l2_subdev_format format = {
 		.which = V4L2_SUBDEV_FORMAT_TRY,
+
 	};
 	struct mx6s_fmt *fmt;
 	int ret;
@@ -1313,8 +1429,6 @@ static int mx6s_vidioc_try_fmt_vid_cap(struct file *file, void *priv,
 	}
 
 	v4l2_fill_mbus_format(&format.format, pix, fmt->mbus_code);
-
-
 	ret = v4l2_subdev_call(sd, pad, set_fmt, &pad_cfg, &format);
 	v4l2_fill_pix_format(pix, &format.format);
 
@@ -1485,16 +1599,12 @@ static int mx6s_vidioc_s_parm(struct file *file, void *priv,
 static int mx6s_vidioc_enum_framesizes(struct file *file, void *priv,
 					 struct v4l2_frmsizeenum *fsize)
 {
-	int ret;
 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
 	struct v4l2_subdev *sd = csi_dev->sd;
 	struct v4l2_subdev_frame_size_enum fse = {
 		.index = fsize->index,
 	};
-	//return v4l2_subdev_call(sd, video, enum_framesizes, fsize);
-	ret =  v4l2_subdev_call(sd, pad, enum_frame_size, NULL, &fse);
-//	if (ret < 0)
- 		return ret;
+	return v4l2_subdev_call(sd, pad, enum_frame_size, NULL, &fse);
 }
 
 static int mx6s_vidioc_enum_frameintervals(struct file *file, void *priv,
@@ -1561,6 +1671,46 @@ static int subdev_notifier_bound(struct v4l2_async_notifier *notifier,
 		  subdev->name);
 
 	return 0;
+}
+
+static int mx6s_csi_mux_sel(struct mx6s_csi_dev *csi_dev)
+{
+       struct device_node *np = csi_dev->dev->of_node;
+       struct device_node *node;
+       phandle phandle;
+       u32 out_val[3];
+       int ret;
+
+       ret = of_property_read_u32_array(np, "csi-mux-mipi", out_val, 3);
+       if (ret) {
+               dev_dbg(csi_dev->dev, "no csi-mux-mipi property found\n");
+               csi_dev->csi_mux_mipi = false;
+       } else {
+               phandle = *out_val;
+
+               node = of_find_node_by_phandle(phandle);
+               if (!node) {
+                       dev_dbg(csi_dev->dev, "not find gpr node by phandle\n");
+                       ret = PTR_ERR(node);
+               }
+               csi_dev->csi_mux.gpr = syscon_node_to_regmap(node);
+               if (IS_ERR(csi_dev->csi_mux.gpr)) {
+                       dev_err(csi_dev->dev, "failed to get gpr regmap\n");
+                       ret = PTR_ERR(csi_dev->csi_mux.gpr);
+               }
+               of_node_put(node);
+               if (ret < 0)
+                       return ret;
+
+               csi_dev->csi_mux.req_gpr = out_val[1];
+               csi_dev->csi_mux.req_bit = out_val[2];
+
+               regmap_update_bits(csi_dev->csi_mux.gpr, csi_dev->csi_mux.req_gpr,
+                       1 << csi_dev->csi_mux.req_bit, 1 << csi_dev->csi_mux.req_bit);
+
+               csi_dev->csi_mux_mipi = true;
+       }
+       return ret;
 }
 
 static int mx6sx_register_subdevs(struct mx6s_csi_dev *csi_dev)
@@ -1662,6 +1812,7 @@ static int mx6s_csi_probe(struct platform_device *pdev)
 	}
 
 	csi_dev->dev = dev;
+	mx6s_csi_mux_sel(csi_dev);
 
 	snprintf(csi_dev->v4l2_dev.name,
 		 sizeof(csi_dev->v4l2_dev.name), "CSI");
