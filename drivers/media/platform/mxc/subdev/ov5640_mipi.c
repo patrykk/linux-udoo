@@ -1764,8 +1764,6 @@ static int init_device(void)
 static struct v4l2_subdev_video_ops ov5640_subdev_video_ops = {
 	.g_parm = ov5640_g_parm,
 	.s_parm = ov5640_s_parm,
-//	.try_mbus_fmt	= ov5640_try_fmt,
-//	.enum_framesizes     = ov5640_enum_framesizes,
 };
 
 static const struct v4l2_subdev_pad_ops ov5640_pad_ops = {
@@ -1882,7 +1880,7 @@ static int ov5640_probe(struct i2c_client *client,
 
 	ov5640_reset();
 
-	ov5640_power_down(0);
+	ov5640_power_down(1);
 
 	retval = ov5640_read_reg(OV5640_CHIP_ID_HIGH_BYTE, &chip_id_high);
 	if (retval < 0 || chip_id_high != 0x56) {
