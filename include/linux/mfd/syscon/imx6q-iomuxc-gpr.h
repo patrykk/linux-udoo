@@ -101,6 +101,7 @@
 #define IMX6Q_GPR1_PCIE_ENTER_L1		BIT(26)
 #define IMX6Q_GPR1_MIPI_COLOR_SW		BIT(25)
 #define IMX6Q_GPR1_DPI_OFF			BIT(24)
+#define IMX6Q_GPR1_PCIE_SW_PERST                BIT(23)
 #define IMX6Q_GPR1_EXC_MON_MASK			BIT(22)
 #define IMX6Q_GPR1_EXC_MON_OKAY			0x0
 #define IMX6Q_GPR1_EXC_MON_SLVE			BIT(22)
@@ -243,6 +244,23 @@
 #define IMX6Q_GPR4_IPU_RD_CACHE_CTL		BIT(0)
 
 #define IMX6Q_GPR5_L2_CLK_STOP			BIT(8)
+#define IMX6Q_GPR5_ENET_TX_CLK_SEL              BIT(9)
+#define IMX6Q_GPR5_PRE_PRG_SEL0_MASK            (0x3 << 12)
+#define IMX6Q_GPR5_PRE_PRG_SEL0_SHIFT           12
+#define IMX6Q_GPR5_PRE_PRG_SEL0_MSB             13
+#define IMX6Q_GPR5_PRE_PRG_SEL0_LSB             12
+#define IMX6Q_GPR5_PRE_PRG_SEL0_PRE1_PRG0_CHAN1 (0x0 << 12)
+#define IMX6Q_GPR5_PRE_PRG_SEL0_PRE1_PRG0_CHAN2 (0x1 << 12)
+#define IMX6Q_GPR5_PRE_PRG_SEL0_PRE1_PRG1_CHAN1 (0x2 << 12)
+#define IMX6Q_GPR5_PRE_PRG_SEL0_PRE1_PRG1_CHAN2 (0x3 << 12)
+#define IMX6Q_GPR5_PRE_PRG_SEL1_MASK            (0x3 << 14)
+#define IMX6Q_GPR5_PRE_PRG_SEL1_SHIFT           14
+#define IMX6Q_GPR5_PRE_PRG_SEL1_MSB             15
+#define IMX6Q_GPR5_PRE_PRG_SEL1_LSB             14
+#define IMX6Q_GPR5_PRE_PRG_SEL1_PRE2_PRG0_CHAN1 (0x0 << 14)
+#define IMX6Q_GPR5_PRE_PRG_SEL1_PRE2_PRG0_CHAN2 (0x1 << 14)
+#define IMX6Q_GPR5_PRE_PRG_SEL1_PRE2_PRG1_CHAN1 (0x2 << 14)
+#define IMX6Q_GPR5_PRE_PRG_SEL1_PRE2_PRG1_CHAN2 (0x3 << 14)
 
 #define IMX6Q_GPR6_IPU1_ID00_WR_QOS_MASK	(0xf << 0)
 #define IMX6Q_GPR6_IPU1_ID01_WR_QOS_MASK	(0xf << 4)
@@ -300,9 +318,11 @@
 #define IMX6Q_GPR12_ARMP_AHB_CLK_EN		BIT(26)
 #define IMX6Q_GPR12_ARMP_ATB_CLK_EN		BIT(25)
 #define IMX6Q_GPR12_ARMP_APB_CLK_EN		BIT(24)
+#define IMX6Q_GPR12_PCIE_PM_TURN_OFF            BIT(16)
 #define IMX6Q_GPR12_DEVICE_TYPE			(0xf << 12)
 #define IMX6Q_GPR12_PCIE_CTL_2			BIT(10)
 #define IMX6Q_GPR12_LOS_LEVEL			(0x1f << 4)
+#define IMX6Q_GPR12_LOS_LEVEL_9                 (0x9 << 4)
 
 #define IMX6Q_GPR13_SDMA_STOP_REQ		BIT(30)
 #define IMX6Q_GPR13_CAN2_STOP_REQ		BIT(29)
@@ -411,6 +431,15 @@
 #define IMX6SX_GPR4_FEC_ENET1_STOP_REQ			(0x1 << 3)
 #define IMX6SX_GPR4_FEC_ENET2_STOP_REQ			(0x1 << 4)
 
+#define IMX6SX_GPR2_MQS_OVERSAMPLE_MASK                 (0x1 << 26)
+#define IMX6SX_GPR2_MQS_OVERSAMPLE_SHIFT                (26)
+#define IMX6SX_GPR2_MQS_EN_MASK                         (0x1 << 25)
+#define IMX6SX_GPR2_MQS_EN_SHIFT                        (25)
+#define IMX6SX_GPR2_MQS_SW_RST_MASK                     (0x1 << 24)
+#define IMX6SX_GPR2_MQS_SW_RST_SHIFT                    (24)
+#define IMX6SX_GPR2_MQS_CLK_DIV_MASK                    (0xFF << 16)
+#define IMX6SX_GPR2_MQS_CLK_DIV_SHIFT                   (16)
+
 #define IMX6SX_GPR5_DISP_MUX_LDB_CTRL_MASK		(0x1 << 3)
 #define IMX6SX_GPR5_DISP_MUX_LDB_CTRL_LCDIF1		(0x0 << 3)
 #define IMX6SX_GPR5_DISP_MUX_LDB_CTRL_LCDIF2		(0x1 << 3)
@@ -440,6 +469,16 @@
 #define IMX6SX_GPR12_PCIE_TEST_POWERDOWN		BIT(30)
 #define IMX6SX_GPR12_PCIE_RX_EQ_MASK			(0x7 << 0)
 #define IMX6SX_GPR12_PCIE_RX_EQ_2			(0x2 << 0)
+
+/* For imx6dl iomux gpr register field definitions */
+#define IMX6DL_GPR3_LVDS1_MUX_CTL_MASK          (0x3 << 8)
+#define IMX6DL_GPR3_LVDS1_MUX_CTL_IPU1_DI0      (0x0 << 8)
+#define IMX6DL_GPR3_LVDS1_MUX_CTL_IPU1_DI1      (0x1 << 8)
+#define IMX6DL_GPR3_LVDS1_MUX_CTL_LCDIF         (0x2 << 8)
+#define IMX6DL_GPR3_LVDS0_MUX_CTL_MASK          (0x3 << 6)
+#define IMX6DL_GPR3_LVDS0_MUX_CTL_IPU1_DI0      (0x0 << 6)
+#define IMX6DL_GPR3_LVDS0_MUX_CTL_IPU1_DI1      (0x1 << 6)
+#define IMX6DL_GPR3_LVDS0_MUX_CTL_LCDIF         (0x2 << 6)
 
 /* For imx6ul iomux gpr register field define */
 #define IMX6UL_GPR1_ENET1_CLK_DIR		(0x1 << 17)
