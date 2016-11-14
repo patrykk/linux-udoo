@@ -92,7 +92,6 @@
 
 #include <linux/regulator/consumer.h>
 
-#ifdef CONFIG_DEVICE_THERMAL
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
 #include <linux/device_cooling.h>
 #define REG_THERMAL_NOTIFIER(a) register_devfreq_cooling_notifier(a);
@@ -102,7 +101,6 @@ extern int register_thermal_notifier(struct notifier_block *nb);
 extern int unregister_thermal_notifier(struct notifier_block *nb);
 #define REG_THERMAL_NOTIFIER(a) register_thermal_notifier(a);
 #define UNREG_THERMAL_NOTIFIER(a) unregister_thermal_notifier(a);
-#endif
 #endif
 
 #ifndef gcdFSL_CONTIGUOUS_SIZE
@@ -261,7 +259,7 @@ _ShrinkMemory(
 }
 #endif
 
-#if gcdENABLE_FSCALE_VAL_ADJUST && defined(CONFIG_DEVICE_THERMAL)
+#if gcdENABLE_FSCALE_VAL_ADJUST //&& defined(CONFIG_DEVICE_THERMAL)
 static int thermal_hot_pm_notify(struct notifier_block *nb, unsigned long event,
        void *dummy)
 {
@@ -358,7 +356,7 @@ MODULE_DEVICE_TABLE(of, mxs_gpu_dt_ids);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
 struct contiguous_mem_pool {
-    struct dma_attrs attrs;
+    unsigned long attrs;
     dma_addr_t phys;
     void *virt;
     size_t size;
@@ -475,8 +473,8 @@ gckPLATFORM_AdjustParam(
 
     Args->gpu3DMinClock = initgpu3DMinClock;
 
-  if(Args->physSize == 0)
-    Args->physSize = 0x80000000;
+    if(Args->physSize == 0)
+    	Args->physSize = 0x40000000;
 
     return gcvSTATUS_OK;
 }
