@@ -58,29 +58,29 @@ static const struct dcic_mux imx6q_dcic0_mux[] = {
 		.val = IMX6Q_GPR10_DCIC1_MUX_CTL_IPU1_DI0,
 	}, {
 		.dcic = DCIC_LVDS0,
-		.val = IMX6Q_GPR10_DCIC1_MUX_CTL_LVDS0,
+		.val = IMX6Q_GPR10_DCIC1_MUX_CTL_IPU1_DI1,
 	}, {
 		.dcic = DCIC_LVDS1,
-		.val = IMX6Q_GPR10_DCIC1_MUX_CTL_LVDS1,
+		.val = IMX6Q_GPR10_DCIC1_MUX_CTL_IPU2_DI0,
 	}, {
 		.dcic = DCIC_HDMI,
-		.val = IMX6Q_GPR10_DCIC1_MUX_CTL_HDMI,
+		.val = IMX6Q_GPR10_DCIC1_MUX_CTL_IPU2_DI1,
 	}
 };
 
 static const struct dcic_mux imx6q_dcic1_mux[] = {
 	{
 		.dcic = DCIC_IPU1_DI1,
-		.val = IMX6Q_GPR10_DCIC2_MUX_CTL_IPU1_DI1,
+		.val = IMX6Q_GPR10_DCIC2_MUX_CTL_IPU1_DI0,
 	}, {
 		.dcic = DCIC_LVDS0,
-		.val = IMX6Q_GPR10_DCIC2_MUX_CTL_LVDS0,
+		.val = IMX6Q_GPR10_DCIC2_MUX_CTL_IPU1_DI1,
 	}, {
 		.dcic = DCIC_LVDS1,
-		.val = IMX6Q_GPR10_DCIC2_MUX_CTL_LVDS1,
+		.val = IMX6Q_GPR10_DCIC2_MUX_CTL_IPU2_DI0,
 	}, {
 		.dcic = DCIC_HDMI,
-		.val = IMX6Q_GPR10_DCIC2_MUX_CTL_MIPI,
+		.val = IMX6Q_GPR10_DCIC2_MUX_CTL_IPU2_DI1,
 	}
 };
 
