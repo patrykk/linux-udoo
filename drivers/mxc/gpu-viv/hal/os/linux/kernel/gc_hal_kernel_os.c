@@ -4954,18 +4954,19 @@ OnError:
         }
         else
         {
+
             /* Get the user pages. */
             down_read(&current->mm->mmap_sem);
 
-            result = get_user_pages(current,
+	    result = get_user_pages_remote(current,
                     current->mm,
                     memory & PAGE_MASK,
                     pageCount,
-                    1,
-                    0,
+                    FOLL_WRITE,
                     pages,
                     gcvNULL
                     );
+
 
             up_read(&current->mm->mmap_sem);
 
@@ -4983,7 +4984,7 @@ OnError:
                             break;
                         }
 
-                        page_cache_release(pages[i]);
+                        put_page(pages[i]);
                         pages[i] = gcvNULL;
                     }
 
@@ -5335,7 +5336,7 @@ OnError:
                 {
                     break;
                 }
-                page_cache_release(pages[i]);
+                put_page(pages[i]);
             }
         }
 
@@ -5581,7 +5582,7 @@ OnError:
 
                 if (pfn_valid(page_to_pfn(pages[i])) && ref[i])
                 {
-                    page_cache_release(pages[i]);
+                    put_page(pages[i]);
                 }
             }
         }
