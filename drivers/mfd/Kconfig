@@ -281,6 +281,13 @@ config MFD_DA9150
 	  Additional drivers must be enabled in order to use the specific
 	  features of the device.
 
+config MFD_MXC_HDMI
+        tristate "Freescale HDMI Core"
+        select MFD_CORE
+        help
+          This is the core driver for the Freescale i.MX6 on-chip HDMI.
+          This MFD driver connects with the video and audio drivers for HDMI.
+
 config MFD_DLN2
 	tristate "Diolan DLN2 support"
 	select MFD_CORE
