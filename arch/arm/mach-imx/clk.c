@@ -5,11 +5,11 @@
 #include <linux/spinlock.h>
 #include "clk.h"
 
-DEFINE_SPINLOCK(imx_ccm_lock);
+//DEFINE_SPINLOCK(imx_ccm_lock);
 
 bool uart_from_osc;
 
-void __init imx_check_clocks(struct clk *clks[], unsigned int count)
+/*void __init imx_check_clocks(struct clk *clks[], unsigned int count)
 {
 	unsigned i;
 
@@ -48,7 +48,7 @@ struct clk * __init imx_obtain_fixed_clock(
 	if (IS_ERR(clk))
 		clk = imx_clk_fixed(name, rate);
 	return clk;
-}
+}*/
 
 /*
  * This fixups the register CCM_CSCMR1 write value.
@@ -70,11 +70,11 @@ struct clk * __init imx_obtain_fixed_clock(
  */
 #define CSCMR1_FIXUP	0x00600000
 
-void imx_cscmr1_fixup(u32 *val)
+/*void imx_cscmr1_fixup(u32 *val)
 {
 	*val ^= CSCMR1_FIXUP;
 	return;
-}
+}*/
 
 static int __init setup_uart_clk(char *uart_rate)
 {
