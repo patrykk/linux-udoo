@@ -21,7 +21,7 @@
 #include "hardware.h"
 
 #ifdef CONFIG_SMP
-.extern imx_scu_base
+.extern scu_base
 #endif
 
 .globl wfe_smp_freq_change_start
@@ -84,7 +84,7 @@ wfe_smp_freq_change_start:
 	/* Inform the SCU we are going to enter WFE. */
 	push	{r0 - r11, lr}
 
-	ldr	r0,=imx_scu_base
+	ldr	r0,=scu_base
 	ldr	r0, [r0]
 	mov	r1, #SCU_PM_DORMANT
 	ldr	r3, =scu_power_mode
@@ -115,7 +115,7 @@ go_back_wfe:
 	/* Inform the SCU we have exited WFE. */
 	push	{r0 - r11, lr}
 
-	ldr	r0,=imx_scu_base
+	ldr	r0,=scu_base
 	ldr	r0, [r0]
 	mov	r1, #SCU_PM_NORMAL
 	ldr	r3, =scu_power_mode
