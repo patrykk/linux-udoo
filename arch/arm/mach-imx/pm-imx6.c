@@ -364,6 +364,30 @@ static int imx6q_suspend_finish(unsigned long val)
 
 static int imx6q_pm_enter(suspend_state_t state)
 {
+//	unsigned int console_saved_reg[11] = {0};
+//	static unsigned int ccm_ccgr4, ccm_ccgr6;
+
+#ifdef CONFIG_SOC_IMX6SX
+	if (imx_src_is_m4_enabled()) {
+		if (imx_gpc_is_m4_sleeping() && imx_mu_is_m4_in_low_freq()) {
+			imx_gpc_hold_m4_in_sleep();
+			imx_mu_enable_m4_irqs_in_gic(true);
+		} else {
+			pr_info("M4 is busy, enter WAIT mode instead of STOP!\n");
+			imx6_set_lpm(WAIT_UNCLOCKED);
+			imx6_set_int_mem_clk_lpm(true);
+			imx_gpc_pre_suspend(false);
+			
+			cpu_do_idle();
+			imx_gpc_post_resume();
+			imx6_set_lpm(WAIT_CLOCKED);
+
+			return 0;
+		}
+	}
+
+#endif
+
 	switch (state) {
 	case PM_SUSPEND_STANDBY:
 		imx6_set_lpm(STOP_POWER_ON);
@@ -404,6 +428,12 @@ static int imx6q_pm_enter(suspend_state_t state)
 	default:
 		return -EINVAL;
 	}
+#ifdef CONFIG_SOC_IMX6SX
+	        if (imx_src_is_m4_enabled()) {
+			imx_mu_enable_m4_irqs_in_gic(false);
+			imx_gpc_release_m4_in_sleep();
+		}
+#endif
 
 	return 0;
 }
@@ -417,6 +447,11 @@ static const struct platform_suspend_ops imx6q_pm_ops = {
 	.enter = imx6q_pm_enter,
 	.valid = imx6q_pm_valid,
 };
+
+void __init imx6q_pm_set_ccm_base(void __iomem *base)
+{
+	        ccm_base = base;
+}
 
 static int __init imx6_pm_get_base(struct imx6_pm_base *base,
 				const char *compat)
