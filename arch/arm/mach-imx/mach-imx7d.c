@@ -16,6 +16,7 @@
 #include <asm/mach/map.h>
 
 #include "common.h"
+#include "cpuidle.h"
 
 static int ar8031_phy_fixup(struct phy_device *dev)
 {
