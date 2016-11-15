@@ -57,12 +57,36 @@ void imx_set_soc_revision(unsigned int rev);
 void imx_init_revision_from_anatop(void);
 struct device *imx_soc_device_init(void);
 void imx6_enable_rbc(bool enable);
+bool imx_src_is_m4_enabled(void);
+bool imx_mu_is_m4_in_low_freq(void);
+bool imx_mu_is_m4_in_stop(void);
+void imx_mu_set_m4_run_mode(void);
 void imx_gpc_check_dt(void);
 void imx_gpc_set_arm_power_in_lpm(bool power_off);
 void imx_gpc_set_arm_power_up_timing(u32 sw2iso, u32 sw);
 void imx_gpc_set_arm_power_down_timing(u32 sw2iso, u32 sw);
 void imx25_pm_init(void);
 void imx27_pm_init(void);
+#ifdef CONFIG_HAVE_IMX_GPC
+void imx_gpc_add_m4_wake_up_irq(u32 irq, bool enable);
+unsigned int imx_gpc_is_m4_sleeping(void);
+#else
+static inline void imx_gpc_add_m4_wake_up_irq(u32 irq, bool enable) {}
+static inline unsigned int imx_gpc_is_m4_sleeping(void) { return 0; }
+#endif
+#ifdef CONFIG_HAVE_IMX_DDRC
+int imx_ddrc_get_ddr_type(void);
+#else
+static inline int imx_ddrc_get_ddr_type(void) { return 0; }
+#endif
+#ifdef CONFIG_HAVE_IMX_MU
+int imx_mu_lpm_ready(bool ready);
+#else
+static inline int imx_mu_lpm_ready(bool ready) { return 0; }
+#endif
+void imx_gpc_hold_m4_in_sleep(void);
+void imx_gpc_release_m4_in_sleep(void);
+
 
 enum mxc_cpu_pwr_mode {
 	WAIT_CLOCKED,		/* wfi only */
@@ -129,6 +153,7 @@ void imx6dl_pm_init(void);
 void imx6sl_pm_init(void);
 void imx6sx_pm_init(void);
 void imx6ul_pm_init(void);
+void imx6q_pm_set_ccm_base(void __iomem *base);
 
 #ifdef CONFIG_PM
 void imx51_pm_init(void);
