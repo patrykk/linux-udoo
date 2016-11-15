@@ -369,9 +369,15 @@ static int imx6q_pm_enter(suspend_state_t state)
 
 #ifdef CONFIG_SOC_IMX6SX
 	if (imx_src_is_m4_enabled()) {
-		if (imx_gpc_is_m4_sleeping() && imx_mu_is_m4_in_low_freq()) {
+		if ( imx_gpc_is_m4_sleeping() 
+#ifdef  CONFIG_HAVE_IMX_MU
+			&& imx_mu_is_m4_in_low_freq()
+#endif
+			) {
 			imx_gpc_hold_m4_in_sleep();
+#ifdef	CONFIG_HAVE_IMX_MU
 			imx_mu_enable_m4_irqs_in_gic(true);
+#endif
 		} else {
 			pr_info("M4 is busy, enter WAIT mode instead of STOP!\n");
 			imx6_set_lpm(WAIT_UNCLOCKED);
@@ -430,7 +436,9 @@ static int imx6q_pm_enter(suspend_state_t state)
 	}
 #ifdef CONFIG_SOC_IMX6SX
 	        if (imx_src_is_m4_enabled()) {
+#ifdef CONFIG_HAVE_IMX_MU
 			imx_mu_enable_m4_irqs_in_gic(false);
+#endif
 			imx_gpc_release_m4_in_sleep();
 		}
 #endif
