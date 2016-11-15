@@ -197,6 +197,14 @@ enum dma_ctrl_flags {
 	DMA_CTRL_REUSE = (1 << 6),
 };
 
+enum dma_ctrl_cmd {
+        DMA_TERMINATE_ALL,
+        DMA_PAUSE,
+        DMA_RESUME,
+        DMA_SLAVE_CONFIG,
+        FSLDMA_EXTERNAL_START,
+};
+
 /**
  * enum sum_check_bits - bit position of pq_check_flags
  */
