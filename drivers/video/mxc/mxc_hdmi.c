@@ -1807,7 +1807,7 @@ static void mxc_hdmi_edid_rebuild_modelist(struct mxc_hdmi *hdmi)
 		mode = &hdmi->fbi->monspecs.modedb[i];
 
 		if (!(mode->vmode & FB_VMODE_INTERLACED) &&
-				(!only_cea || mxc_edid_mode_to_vic(mode))) {
+				(!only_cea || mxc_edid_mode_to_vic(mode) != 0 )) {
 
 			dev_dbg(&hdmi->pdev->dev, "Added mode %d:", i);
 			dev_dbg(&hdmi->pdev->dev,
@@ -1946,7 +1946,7 @@ static void mxc_hdmi_cable_connected(struct mxc_hdmi *hdmi)
 
 	/* Rebuild even if they're the same in case only_cea changed */
 	case HDMI_EDID_SAME:
-		mxc_hdmi_edid_rebuild_modelist(hdmi);
+		//mxc_hdmi_edid_rebuild_modelist(hdmi);
 		break;
 
 	case HDMI_EDID_FAIL:
