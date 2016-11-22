@@ -191,6 +191,24 @@ static inline struct clk *imx_clk_mux_flags(const char *name,
 			&imx_ccm_lock);
 }
 
+static inline struct clk *imx_clk_mux_glitchless(const char *name,
+		                void __iomem *reg, u8 shift, u8 width, const char **parents,
+				                int num_parents)
+{
+	        return clk_register_mux(NULL, name, parents, num_parents,
+		                        CLK_SET_RATE_NO_REPARENT, reg, shift,
+		                        width, 0, &imx_ccm_lock);
+}
+
+static inline struct clk *imx_clk_mux_ldb(const char *name, void __iomem *reg,
+		                u8 shift, u8 width, const char **parents, int num_parents)
+{
+	        return clk_register_mux(NULL, name, parents, num_parents,
+		                        CLK_SET_RATE_NO_REPARENT | CLK_SET_RATE_PARENT, reg,
+		                        shift, width, CLK_MUX_READ_ONLY, &imx_ccm_lock);
+}
+
+
 struct clk *imx_clk_cpu(const char *name, const char *parent_name,
 		struct clk *div, struct clk *mux, struct clk *pll,
 		struct clk *step);
