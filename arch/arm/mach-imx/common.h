@@ -65,6 +65,7 @@ void imx_gpc_check_dt(void);
 void imx_gpc_set_arm_power_in_lpm(bool power_off);
 void imx_gpc_set_arm_power_up_timing(u32 sw2iso, u32 sw);
 void imx_gpc_set_arm_power_down_timing(u32 sw2iso, u32 sw);
+void imx_mu_enable_m4_irqs_in_gic(bool enable);
 void imx25_pm_init(void);
 void imx27_pm_init(void);
 #ifdef CONFIG_HAVE_IMX_GPC
