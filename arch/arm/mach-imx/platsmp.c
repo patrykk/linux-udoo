@@ -23,10 +23,8 @@
 #include "common.h"
 #include "hardware.h"
 
-#define SCU_STANDBY_ENABLE      (1 << 5)
-
 u32 g_diag_reg;
-void __iomem *imx_scu_base;
+void __iomem *scu_base;
 
 static struct map_desc scu_io_desc __initdata = {
 	/* .virtual and .pfn are run-time assigned */
@@ -45,7 +43,7 @@ void __init imx_scu_map_io(void)
 	scu_io_desc.pfn = __phys_to_pfn(base);
 	iotable_init(&scu_io_desc, 1);
 
-	imx_scu_base = IMX_IO_ADDRESS(base);
+	scu_base = IMX_IO_ADDRESS(base);
 }
 
 static int imx_boot_secondary(unsigned int cpu, struct task_struct *idle)
@@ -61,36 +59,17 @@ static int imx_boot_secondary(unsigned int cpu, struct task_struct *idle)
  */
 static void __init imx_smp_init_cpus(void)
 {
-        int i, ncores = scu_get_core_count(imx_scu_base);
+	int i, ncores;
 
-        u32 me = smp_processor_id();
-
-        if (setup_max_cpus < ncores)
-                ncores = (setup_max_cpus) ? setup_max_cpus : 1;
+	ncores = scu_get_core_count(scu_base);
 
 	for (i = ncores; i < NR_CPUS; i++)
 		set_cpu_possible(i, false);
-
-        /* Set the SCU CPU Power status for each inactive core. */
-        for (i = 0; i < NR_CPUS;  i++) {
-                if (i != me)
-                        __raw_writeb(SCU_PM_POWEROFF, imx_scu_base + 0x08 + i);
-        }
-}
-
-void imx_scu_standby_enable(void)
-{
-        u32 val = readl_relaxed(imx_scu_base);
-
-        val |= SCU_STANDBY_ENABLE;
-        writel_relaxed(val, imx_scu_base);
 }
 
 void imx_smp_prepare(void)
 {
-	scu_enable(imx_scu_base);
-        /* Need to enable SCU standby for entering WAIT mode */
-        imx_scu_standby_enable();
+	scu_enable(scu_base);
 }
 
 static void __init imx_smp_prepare_cpus(unsigned int max_cpus)
@@ -109,7 +88,7 @@ static void __init imx_smp_prepare_cpus(unsigned int max_cpus)
 	sync_cache_w(&g_diag_reg);
 }
 
-struct smp_operations  imx_smp_ops __initdata = {
+const struct smp_operations imx_smp_ops __initconst = {
 	.smp_init_cpus		= imx_smp_init_cpus,
 	.smp_prepare_cpus	= imx_smp_prepare_cpus,
 	.smp_boot_secondary	= imx_boot_secondary,
@@ -144,7 +123,7 @@ static void __init ls1021a_smp_prepare_cpus(unsigned int max_cpus)
 	iounmap(dcfg_base);
 }
 
-struct smp_operations  ls1021a_smp_ops __initdata = {
+const struct smp_operations ls1021a_smp_ops __initconst = {
 	.smp_prepare_cpus	= ls1021a_smp_prepare_cpus,
 	.smp_boot_secondary	= ls1021a_boot_secondary,
 };
