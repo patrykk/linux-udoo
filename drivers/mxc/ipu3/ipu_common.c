@@ -147,7 +147,7 @@ static int ipu_clk_setup_enable(struct ipu_soc *ipu)
 	char pixel_clk_1_sel[] = "ipu1_pclk1_sel";
 	char pixel_clk_0_div[] = "ipu1_pclk0_div";
 	char pixel_clk_1_div[] = "ipu1_pclk1_div";
-	char *ipu_pixel_clk_sel[] = { "ipu1", "ipu1_di0", "ipu1_di1", "ipu2", "ipu2_di0", "ipu2_di1"};
+	char *ipu_pixel_clk_sel[] = { "ipu1", "ipu1_di0", "ipu1_di1", };
 	char *pclk_sel;
 	struct clk *clk;
 	int ret;
