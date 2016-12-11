@@ -2,6 +2,7 @@
  * Copyright 2013 Freescale Semiconductor, Inc.
  *
  * Author: Fabio Estevam <fabio.estevam@freescale.com>
+ * Author: Ettore Chimenti <ettore.chimenti@udoo.org>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -15,4 +16,5 @@
 / {
 	model = "Udoo i.MX6 Dual-lite Board";
 	compatible = "udoo,imx6dl-udoo", "fsl,imx6dl";
+	
 };
